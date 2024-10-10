@@ -1,5 +1,5 @@
 # Define configuration constants
-URL = "https://e9c2f22e-2b40-415c-a3ce-6b99c94c93ca-00-2hf8ke9girsf3.janeway.replit.dev"
+URL = "https://b15a212e-ca66-4c21-ad34-76d56d3dc709-00-2jytsqhog1kqq.spock.replit.dev"
 ACME_API_KEY = "PRCAEUY-LA6UTNQ-XYL5DEI-ZNUEMDA"
 ADMIN_CHAT_ID = 1224919055
 PORT = 8000
