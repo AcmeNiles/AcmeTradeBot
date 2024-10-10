@@ -120,7 +120,7 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, to
 
 # Define the conversation handler
 payment_handler = ConversationHandler(
-    entry_points=[CommandHandler('pay', pay)],
+    entry_points=[CommandHandler('receive', pay)],
     states={
         ASK_TICKER: [MessageHandler(filters.TEXT, ask_for_ticker)],
         ASK_AMOUNT: [MessageHandler(filters.TEXT, ask_for_amount)],

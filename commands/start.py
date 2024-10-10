@@ -24,7 +24,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         )
     else:
         welcome_text += (
-            "*Claim your free access pass and /trade to start making some money\! 💸 *"
+            "*/trade or /receive now and start making some money\! 💸*"
         )
 
     # Get user data
@@ -40,7 +40,7 @@ async def start(update: Update, context: CallbackContext) -> None:
             keyboard = [
                 [
                     InlineKeyboardButton(
-                        "Mint Your Access Pass",
+                        "Claim Your Access Pass",
                         web_app=WebAppInfo(url=minting_link)  # Open as a Web App inside Telegram
                     )
                 ],

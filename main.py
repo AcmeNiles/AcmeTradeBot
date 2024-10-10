@@ -16,6 +16,8 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ExtBot,
+    filters,
+    MessageHandler,
     TypeHandler,
 )
 
@@ -38,6 +40,8 @@ async def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(trade_handler)
     application.add_handler(payment_handler)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
+
 
     # Pass webhook settings to telegram
     await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
