@@ -6,7 +6,6 @@ authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-
 python = ">=3.10.0,<3.12"
 asgiref = "^3.8.1"
 flask = "^3.0.3"
