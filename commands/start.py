@@ -1,15 +1,18 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
-from telegram.ext import CallbackContext
-from utils.createJWT import get_user_data  # Import user data extraction function
-from createMintingLink import create_minting_link  # Import create_minting_link function
-from config import WELCOME_IMAGE_URL
+# handlers/start_handler.py
 
-# Function to handle the /start command
-async def start(update: Update, context: CallbackContext) -> None:
-    # Get the token symbol from the command arguments
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import CallbackContext
+from utils.createJWT import get_user_data
+from utils.minting import create_minting_link
+from config import WELCOME_IMAGE_URL, CHAT_GROUP
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+async def start(update: Update, context: CallbackContext) -> int:
     token_symbol = context.args[0] if context.args else None
 
-    # Base welcome text
     welcome_text = (
         "👋 *Welcome to Acme\!*\n\n"
         "💳 *Tap\. Trade\. Done\.\n*Easily buy any token with your bank card\.\n\n"
@@ -17,51 +20,41 @@ async def start(update: Update, context: CallbackContext) -> None:
         "🔒 *Own your Tokens\n*You always control your tokens\. Acme never touches them\.\n\n"
     )
 
-    # Conditional addition based on token symbol
     if token_symbol:
         welcome_text += (
             f"*Here to create a trading link for {token_symbol}?* Mint a free access pass to start making some money \! 💸 "
         )
     else:
-        welcome_text += (
-            "*/trade or /receive now and start making some money\! 💸*"
-        )
+        welcome_text += "*/trade now and start making some money\! 💸*"
 
-    # Get user data
     user_data = get_user_data(update)
 
     try:
-        # Create the minting link
         minting_link = create_minting_link(user_data)
+        membership_link = await member_link(update.effective_user.id, CHAT_GROUP, context)
 
         if minting_link:
-            # Create an inline keyboard button with the WebAppInfo (to open in Telegram as a web app)
-            # Assuming minting_link is defined elsewhere in your code
             keyboard = [
                 [
-                    InlineKeyboardButton(
-                        "Claim Your Access Pass",
-                        web_app=WebAppInfo(url=minting_link)  # Open as a Web App inside Telegram
-                    )
+                    InlineKeyboardButton("Claim Your Access Pass", web_app=WebAppInfo(url=minting_link)),
                 ],
                 [
-                    InlineKeyboardButton(
-                        "Open Vault",  # Button to open the vault
-                        web_app=WebAppInfo(url='https://app.acme.am/vault')  # Link to the vault web app
-                    )
+                    InlineKeyboardButton("Trade Now", callback_data='start_trade'),
                 ],
                 [
-                    InlineKeyboardButton(
-                        "Go to Acme Group",  # Button to go to Acme group
-                        url='https://t.me/acmeonetap'  # Link to the Telegram group
-                    )
-                ]
+                    InlineKeyboardButton("Open Vault", web_app=WebAppInfo(url='https://app.acme.am/vault')),
+                    InlineKeyboardButton("Go to Acme Group", url=membership_link),
+                ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            # Send the welcome text as the caption of the image
             await update.message.reply_photo(photo=WELCOME_IMAGE_URL, caption=welcome_text, reply_markup=reply_markup, parse_mode='MarkdownV2')
+
+            return START_TRADE  # Ensure a valid state is returned here
         else:
-            await update.message.reply_text("Minting successful, but no minting link was returned.")
+            await reply(update, "Minting successful, but no minting link was returned.")
+            return ConversationHandler.END
     except Exception as e:
-        await update.message.reply_text(f"An error occurred: {str(e)}")
+        logger.error(f"An error occurred: {str(e)}")
+        await reply(update, f"An error occurred: {str(e)}")
+        return ConversationHandler.END
