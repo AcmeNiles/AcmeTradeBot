@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import os
 import json
-from config import WAITING_FOR_AUTH, ACME_URL
+from config import WAITING_FOR_AUTH, ACME_URL, ACME_API_KEY
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import ContextTypes, CallbackContext
 from typing import Union
@@ -104,18 +104,19 @@ def create_auth_link(tg_key: str) -> dict:
     url = f"{ACME_URL}/operations/telegram/intent/create-claim-loyalty-card-intent"
 
     headers = {
-        'X-API-KEY': API_KEY,
+        'X-API-KEY': ACME_API_KEY,
         'X-Secure-TG-User-Info': tg_key,
         'Content-Type': 'application/json'
     }
 
     payload = {
-        "contractAddress": "0xC4F7f435F9cECA0c844f3dDA46EeC00c4F7E34FC",  # Example address
-        "chainId": "137",
-        "name": "Telegram User",
-        "imageUri": "https://static-00.iconduck.com/assets.00/telegram-icon-2048x2048-30xu965w.png",
-        "description": "Telegram User Claim",
-        "websiteUrl": "https://acme.am/"
+        "chainId": "42161",
+        "contractAddress": "0xA3090C10b2dD4B69A594CA4dF7b1F574a8D0B476",
+        "name": "Coyote Early Pass",
+        "description": "The Coyote Early Pass unlocks exclusive perks for early bird users of Acme. Thank you for supporting us! 😊.",
+        "imageUri": "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public",
+        "websiteUrl": "https://www.acme.am",
+        "intentLimit": 1
     }
 
     try:

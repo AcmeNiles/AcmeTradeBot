@@ -5,18 +5,22 @@ PORT = os.getenv("PORT")
 ACME_API_KEY = os.getenv("ACME_API_KEY")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
+# Get the environment variable
+env = os.getenv('ENV', 'DEV')  # Default to 'development' if ENV is not set
 
-# Dev
-URL = os.getenv("DEV_URL")
-BOT_TOKEN = os.getenv("DEV_TOKEN")
-ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
-ACME_URL = os.getenv("ACME_DEV_URL")
-
-# Production
-#URL = os.getenv("URL")
-#BOT_TOKEN = os.getenv("BOT_TOKEN")
-#ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
-#ACME_URL = os.getenv("ACME_PROD_URL")
+# Environment settings
+if env == 'DEV':
+  print("Running in Development Mode")
+  URL = os.getenv("DEV_URL")
+  BOT_TOKEN = os.getenv("DEV_TOKEN")
+  ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
+  ACME_URL = os.getenv("ACME_DEV_URL")
+else:
+  print("Running in Production Mode")
+  URL = os.getenv("URL")
+  BOT_TOKEN = os.getenv("BOT_TOKEN")
+  ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
+  ACME_URL = os.getenv("ACME_PROD_URL")
 
 # Define conversation states
 SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)
