@@ -142,10 +142,9 @@ def auth_tg_user(update: Update):
     return auth_response
 
 async def get_invite_link(update: Update, context: ContextTypes.DEFAULT_TYPE, group_id: str) -> str:
-    user_id = update.effective_user.id  # Extract user ID from update
-    chat_id = update.effective_chat.id    # Extract chat ID from update
-
     try:
+        user_id = update.effective_user.id  # Extract user ID from update
+        chat_id = update.effective_chat.id    # Extract chat ID from update
         member_status = await context.bot.get_chat_member(chat_id, user_id)
 
         if member_status.status in ['member', 'administrator', 'creator']:

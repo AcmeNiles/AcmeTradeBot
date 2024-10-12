@@ -27,4 +27,5 @@ AUTHENTICATED_COMMANDS = {'trade', 'pay', 'request', 'vault'}
 
 #Bot Card Image Paths
 MENU_PHOTO = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public"
+TRADE_PHOTO = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public"
 
