@@ -20,7 +20,7 @@ from handlers.input_handler import input_to_action
 from handlers.token_handler import handle_token
 from handlers.amount_handler import handle_amount
 from handlers.receiver_handler import handle_recipient
-
+from utils.webhook import set_acme_webhook
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -28,33 +28,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.DEBUG
 )
-
-# Function to set Acme Webhook
-async def set_acme_webhook():
-    # ACME webhook setup URL and headers
-    acme_api = ACME_URL + "user/set-web-hook"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "X-API-KEY": ACME_API_KEY
-    }
-    # Data payload with the Replit URL as the webhook target
-    data = {
-        "webHookUrl": URL + "/acme"
-    }
-
-    try:
-        # Make the POST request to set the webhook
-        response = requests.post(acme_api, json=data, headers=headers)
-
-        # Print the response in the logs
-        if response.status_code == 200:
-            print(f"ACME webhook set successfully! Response: {response.text}, {data}")
-        else:
-            print(f"Failed to set ACME webhook. Status code: {response.status_code}\nResponse: {response.text}")
-
-    except Exception as e:
-        print(f"An error occurred while setting the ACME webhook: {str(e)}")
 
 # Main function to set up the bot
 async def main():
