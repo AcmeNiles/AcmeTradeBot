@@ -7,16 +7,16 @@ ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
 
 # Dev
-#URL = os.getenv("DEV_URL")
-#BOT_TOKEN = os.getenv("DEV_TOKEN")
-#ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
-#ACME_URL = os.getenv("ACME_DEV_URL")
+URL = os.getenv("DEV_URL")
+BOT_TOKEN = os.getenv("DEV_TOKEN")
+ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
+ACME_URL = os.getenv("ACME_DEV_URL")
 
 # Production
-URL = os.getenv("URL")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
-ACME_URL = os.getenv("ACME_PROD_URL")
+#URL = os.getenv("URL")
+#BOT_TOKEN = os.getenv("BOT_TOKEN")
+#ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
+#ACME_URL = os.getenv("ACME_PROD_URL")
 
 # Define conversation states
 SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)

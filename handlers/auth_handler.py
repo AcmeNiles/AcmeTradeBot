@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import os
 import json
-from config import WAITING_FOR_AUTH
+from config import WAITING_FOR_AUTH, ACME_URL
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import ContextTypes, CallbackContext
 from typing import Union
@@ -101,7 +101,7 @@ def get_tg_user(update: Update) -> dict:
 
 def create_auth_link(tg_key: str) -> dict:
     """Calls the authentication API to create an intent for trading."""
-    url = f"{BASE_URL}/operations/telegram/intent/create-claim-loyalty-card-intent"
+    url = f"{ACME_URL}/operations/telegram/intent/create-claim-loyalty-card-intent"
 
     headers = {
         'X-API-KEY': API_KEY,

@@ -47,7 +47,7 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     # Check if the context user data token is blank
     if not token_text or not context.user_data.get('token'):
-        logger.warning("No token provided.")
+        logger.info("No token provided.")
         reply_markup = InlineKeyboardMarkup([featured_token_options])
         await update.message.reply_text(
             "You didn't provide a token. Please select one from the list below:", 
