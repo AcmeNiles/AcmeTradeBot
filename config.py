@@ -1,20 +1,22 @@
 import os
 
 # Define configuration constants
-PORT = 8000
+PORT = os.getenv("PORT")
 ACME_API_KEY = os.getenv("ACME_API_KEY")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-ACME_URL = "https://acme-prod.fly.dev/operations/dev/"
+
 
 # Dev
-#URL = "https://b15a212e-ca66-4c21-ad34-76d56d3dc709-00-2jytsqhog1kqq.spock.replit.dev"
-#TOKEN = "6790358488:AAHg1Ml3Dqvco4IT7RfGjMaG4vCvPmSSUwA"
-#ACME_GROUP = "@acmetest"
+#URL = os.getenv("DEV_URL")
+#TOKEN = os.getenv("DEV_TOKEN")
+#ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
+#ACME_URL = os.getenv("ACME_DEV_URL")
 
 # Production
 URL = os.getenv("URL")
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
+ACME_URL = os.getenv("ACME_PROD_URL")
 
 # Define conversation states
 SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)
