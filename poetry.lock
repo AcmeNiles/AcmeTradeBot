@@ -587,6 +587,17 @@ socks = ["httpx[socks]"]
 webhooks = ["tornado (>=6.4,<7.0)"]
 
 [[package]]
+name = "pytz"
+version = "2024.2"
+description = "World timezone definitions, modern and historical"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pytz-2024.2-py2.py3-none-any.whl", hash = "sha256:31c7c1817eb7fae7ca4b8c7ee50c72f93aa2dd863de768e1ef4245d426aa0725"},
+    {file = "pytz-2024.2.tar.gz", hash = "sha256:2aa355083c50a0f93fa581709deac0c9ad65cca8a9e9beac660adcbd493c798a"},
+]
+
+[[package]]
 name = "requests"
 version = "2.32.3"
 description = "Python HTTP for Humans."
@@ -692,7 +703,20 @@ MarkupSafe = ">=2.1.1"
 [package.extras]
 watchdog = ["watchdog (>=2.3)"]
 
+[[package]]
+name = "yikai-tools"
+version = "1.0.6"
+description = "python modules."
+optional = false
+python-versions = "*"
+files = [
+    {file = "yikai-tools-1.0.6.tar.gz", hash = "sha256:d88a91402b37521cb2e9588cdd0a245231161747d558cd90e270d20af013136a"},
+]
+
+[package.dependencies]
+pytz = "*"
+
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "a7d7e15b4ffce5912acf6e46ca60c9bfe16c503dc8e83fad6e1abf24b1f2569f"
+content-hash = "9428c7e2e7cf8644a6868bfe74571dc62f0d2a3646fb8e61551ad4dc09c60827"

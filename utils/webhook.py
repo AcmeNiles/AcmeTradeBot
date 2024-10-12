@@ -1,7 +1,7 @@
 import requests
 from config import URL, ACME_URL, ACME_API_KEY
 
-def set_acme_webhook():
+async def set_acme_webhook():
     # ACME webhook setup URL and headers
     acme_api = ACME_URL + "user/set-web-hook"
     headers = {

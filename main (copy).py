@@ -1,94 +1,84 @@
+import asyncio
 import logging
 from http import HTTPStatus
-import asyncio
+
 import uvicorn
 from asgiref.wsgi import WsgiToAsgi
 from flask import Flask, Response, make_response, request
-from config import *
+
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
+    Application,
+    CallbackContext,
     CallbackQueryHandler,
+    CommandHandler,
     ConversationHandler,
-    filters
+    MessageHandler,
 )
+from telegram.ext import filters  # For filters
 
-from handlers.action_handler import execute_action
-from handlers.input_handler import input_to_action
-from handlers.token_handler import handle_token
-from handlers.amount_handler import handle_amount
-from handlers.receiver_handler import handle_recipient
+from webhook import set_acme_webhook
+from config import TOKEN, PORT, URL
+from commands.menu import menu, select_intent
+from commands.ticker import ask_ticker
+from commands.trade import select_token, trade_card
+#from commands.pay import start_pay, ask_pay_ticker, ask_pay_amount, pay_card
+from utils.report_state import report_state
 
+# Define conversation states
+from config import MENU, SELECT_INTENT, SELECT_TOKEN, TRADE_CARD
 
-# Initialize logger
+# Enable logging
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+# set higher logging level for httpx to avoid all GET and POST requests being logged
+#logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
-)
 
-# Function to set Acme Webhook
-async def set_acme_webhook():
-    # ACME webhook setup URL and headers
-    acme_api = ACME_URL + "user/set-web-hook"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "X-API-KEY": ACME_API_KEY
-    }
-    # Data payload with the Replit URL as the webhook target
-    data = {
-        "webHookUrl": URL + "/acme"
-    }
-
-    try:
-        # Make the POST request to set the webhook
-        response = requests.post(acme_api, json=data, headers=headers)
-
-        # Print the response in the logs
-        if response.status_code == 200:
-            print(f"ACME webhook set successfully! Response: {response.text}, {data}")
-        else:
-            print(f"Failed to set ACME webhook. Status code: {response.status_code}\nResponse: {response.text}")
-
-    except Exception as e:
-        print(f"An error occurred while setting the ACME webhook: {str(e)}")
-
-# Main function to set up the bot
-async def main():
-    # Replace 'YOUR_TOKEN' with your actual bot token
-    application = ApplicationBuilder().token(TOKEN).build()
-
+# Example fallback handler function
+async def unknown_command_handler(update: Update, context: CallbackContext):
+    await update.message.reply_text(
+        "Sorry, I didn't understand that command. Please use /start to begin or select an option from the menu."
+    )
+    
+async def main() -> None:
+    application = (
+        Application.builder().token(TOKEN).updater(None).build()
+    )
+    # register handlers
     # Define the conversation handler
-    conv_handler = ConversationHandler(
+    conversation_handler = ConversationHandler(
         entry_points=[
-            CommandHandler(['start', 'menu', 'trade', 'pay', 'request', 'vault'], input_to_action),
-            CallbackQueryHandler(input_to_action),
-            MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)  # Catch any text that isn't a command
+            CommandHandler('start', menu),  # Entry point for starting the bot
+            CommandHandler('trade', select_token),  # Entry point for trading
+            MessageHandler(filters.TEXT & ~filters.COMMAND, menu)  # Default to menu for other text
         ],
         states={
-            SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_token)],
-            SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount)],
-            SELECT_RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recipient)],
-            WAITING_FOR_AUTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, execute_action)]
-
+            MENU: [
+                CallbackQueryHandler(menu, pattern='cancel'),  # Handles cancel button
+                CallbackQueryHandler(menu, pattern='menu')  # Handles "menu" button
+            ],
+            SELECT_INTENT: [
+                CallbackQueryHandler(select_intent),  # Handles button clicks for Trade Now and Get Paid
+            ],
+            SELECT_TOKEN: [
+                CallbackQueryHandler(select_token),  # Handles "Trade Now" button
+            ],
+            TRADE_CARD: [
+                CallbackQueryHandler(trade_card),  # Handle trading link interactions
+            ],
         },
         fallbacks=[
-            MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)  # Catch any text that isn't a command
+            CommandHandler('start', menu),  # Entry point for starting the bot
+            CommandHandler('trade', select_token),  # Entry point for trading
+            MessageHandler(filters.TEXT & ~filters.COMMAND, menu)  # Default to menu for other text       
         ],
-        allow_reentry=True
     )
+    application.add_handler(conversation_handler)
 
 
-    # Add the conversation handler to the application
-    application.add_handler(conv_handler)
-
-    # Pass webhook settings to telegram and acme
+    # Pass webhook settings to telegram
     await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
-    
-    await set_acme_webhook()
+    set_acme_webhook()
 
     # Set up webserver
     flask_app = Flask(__name__)
@@ -151,6 +141,6 @@ async def main():
         await webserver.serve()
         await application.stop()
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-
