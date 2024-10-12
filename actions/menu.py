@@ -1,70 +1,77 @@
-import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
 from telegram.ext import ConversationHandler, ContextTypes
-
-# Import constants
-from config import ACME_GROUP, MENU_PHOTO
-
-# Setup logging
-logger = logging.getLogger(__name__)
+from config import logger, ACME_GROUP
+from messages_photos import PHOTO_MENU, MESSAGE_MENU, MESSAGE_LOGIN, MESSAGE_LOGGED_IN
 
 # Process Menu Function
-async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, url=None, is_authenticated=False):
-    """
-    Displays the main menu to authenticated users, or shows minting link to unauthenticated users.
-    If the URL is provided, it overrides the menu with a specific action (e.g., minting link).
-    """
+async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_result=None):
     logger.info("Entered process_menu function")
-    logger.debug(f"Parameters: url={url}, is_authenticated={is_authenticated}")
-
-    # Common menu message
-    menu_message = (
-        "👋 *Welcome to Acme\!* \n\n"
-        "💳 *Tap\. Trade\. Done\.*\n"
-        "Easily buy any token with your bank card\.\n\n"
-        "🤑 *Share to Earn*\n"
-        "Share trading links and earn 50\% fees \+ airdrops\.\n\n"
-        "🔒 *Own your Tokens*\n"
-        "Tokens are secured in a safe\. Only you have the keys\.\n\n"
-    )
-
-    group_name = ACME_GROUP
-    logger.debug(f"Group name set to: {group_name}")
+    logger.debug(f"Authentication result: {auth_result}")
+    logger.debug(f"Update object: {update}")
 
     try:
-        invite_link = await get_invite_link(update.effective_user.id, group_name, context)
+        # Generate invite link
+        invite_link = await get_invite_link(update.effective_user.id, ACME_GROUP, context)
         logger.info(f"Generated invite link: {invite_link}")
     except Exception as e:
-        logger.error(f"Failed to get invite link: {str(e)}")
+        logger.error(f"Failed to generate invite link: {str(e)}")
         await update.message.reply_text("An error occurred while generating the invite link.")
         return
 
     try:
-        if not is_authenticated:
+        # Local copies of message and photo
+        local_message_menu = MESSAGE_MENU if MESSAGE_MENU else None
+        local_photo_menu = PHOTO_MENU if PHOTO_MENU else None
+
+        if not local_message_menu:
+            logger.error("MESSAGE_MENU is missing or None.")
+            raise ValueError("MESSAGE_MENU is not available.")
+
+        if not local_photo_menu:
+            logger.error("PHOTO_MENU is missing or None.")
+            raise ValueError("PHOTO_MENU is not available.")
+
+        logger.debug(f"Loaded local_message_menu: {local_message_menu}")
+        logger.debug(f"Loaded local_photo_menu: {local_photo_menu}")
+
+        # Handle unauthenticated user
+        if 'url' in auth_result:
             logger.info("User is not authenticated, showing minting link")
 
-            # If the user is not authenticated, show the minting link and extra message
-            minting_link = url or "https://example.com/mint"
+            minting_link = auth_result.get('url', "https://bit.ly/iamcoyote")
             logger.debug(f"Using minting link: {minting_link}")
 
-            menu_message += "Get your access pass and start making some money\! 💸 \n"
+            local_message_menu += MESSAGE_LOGIN
+            logger.debug(f"Updated local_message_menu for unauthenticated user: {local_message_menu}")
 
-            # Web App Button for "Claim Your Access Pass"
+            # Buttons for unauthenticated users
             buttons = [
                 [InlineKeyboardButton("Claim Your Access Pass", web_app=WebAppInfo(url=minting_link))],
-                [InlineKeyboardButton("Say Hi! 👋", url=invite_link)],
+                [InlineKeyboardButton("Say Hi! 👋", url=invite_link)],  # Escaped character for markdown
             ]
-            logger.debug(f"Buttons prepared for unauthenticated user: {buttons}")
+            logger.debug(f"Buttons for unauthenticated user: {buttons}")
 
-            # Send menu with the minting link
-            await update.message.reply_photo(photo=MENU_PHOTO, caption=menu_message, parse_mode="MarkdownV2", reply_markup=InlineKeyboardMarkup(buttons))
-            logger.info("Menu sent to unauthenticated user")
+            # Send the menu with the minting link and photo
+            try:
+                await update.message.reply_photo(
+                    photo=local_photo_menu,
+                    caption=local_message_menu,
+                    parse_mode="MarkdownV2",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                logger.info("Menu sent to unauthenticated user")
+            except Exception as e:
+                logger.error(f"Failed to send unauthenticated user menu photo: {str(e)}")
+                await update.message.reply_text("An error occurred while sending the menu photo.")
 
-        else:
-            logger.info("User is authenticated, showing the main menu")
+        # Handle authenticated user
+        elif 'id' in auth_result:
+            logger.info("User is authenticated, showing main menu")
 
-            menu_message += "Let's start making some money\! 💸 \n"
+            local_message_menu += MESSAGE_LOGGED_IN
+            logger.debug(f"Updated local_message_menu for authenticated user: {local_message_menu}")
 
+            # Buttons for authenticated users
             buttons = [
                 [
                     InlineKeyboardButton("📈 Trade Now", callback_data='/trade'),
@@ -74,17 +81,33 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, url=N
                     InlineKeyboardButton("⬆️ Pay", callback_data='/pay'),
                     InlineKeyboardButton("⬇️ Request", callback_data='/request')
                 ],
-                [InlineKeyboardButton("👋 Say Hi!", url=invite_link)]
+                [InlineKeyboardButton("👋 Say Hi!", url=invite_link)]  # Escaped character for markdown
             ]
-            logger.debug(f"Buttons prepared for authenticated user: {buttons}")
+            logger.debug(f"Buttons for authenticated user: {buttons}")
 
-            # Send authenticated menu
-            await update.message.reply_photo(photo=MENU_PHOTO, caption=menu_message, parse_mode="MarkdownV2", reply_markup=InlineKeyboardMarkup(buttons))
-            logger.info("Menu sent to authenticated user")
+            # Send the authenticated menu with the photo
+            try:
+                await update.message.reply_photo(
+                    photo=local_photo_menu,
+                    caption=local_message_menu,
+                    parse_mode="MarkdownV2",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                logger.info("Menu sent to authenticated user")
+            except Exception as e:
+                logger.error(f"Failed to send authenticated user menu photo: {str(e)}")
+                await update.message.reply_text("An error occurred while sending the menu photo.")
+
+    except ValueError as ve:
+        # Handle specific value errors for missing message or photo
+        logger.error(f"ValueError: {str(ve)}")
+        await update.message.reply_text(f"An error occurred: {str(ve)}")
 
     except Exception as e:
-        logger.error(f"Failed to send menu: {str(e)}")
-        await update.message.reply_text("An error occurred while trying to send the menu. Please try again later.")
+        # Catch-all for other exceptions during the process
+        logger.error(f"Failed to process menu: {str(e)}")
+        await update.message.reply_text("An error occurred while processing the menu. Please try again later.")
+
 
 
 # Updated get_invite_link function

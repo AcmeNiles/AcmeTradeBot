@@ -1,12 +1,7 @@
-import logging
+from config import logger
 from telegram import Update, Bot
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-
-# Setup logging
-logger = logging.getLogger(__name__)
-
-
 
 
 async def handle_recipient(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

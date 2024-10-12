@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from config import logger
 from http import HTTPStatus
 
 import uvicorn

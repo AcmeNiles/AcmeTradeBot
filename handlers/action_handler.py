@@ -1,13 +1,12 @@
-import logging
+from config import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ConversationHandler, ContextTypes
 from config import AUTHENTICATED_COMMANDS
 from actions.menu import process_menu
+from actions.trade import process_trade
 from handlers.auth_handler import is_authenticated, login_card
 from handlers.token_handler import handle_token
 
-# Setup logging
-logger = logging.getLogger(__name__)
 
 # Route Action: Handles each command's routing and intent management
 async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -49,36 +48,34 @@ async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 # Execute the action after collecting all required data
 async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Executes the action based on the user's intent, token, amount and receiver.
+    Executes the action based on the user's intent, token, amount, and receiver.
     """
     intent = context.user_data.get('intent')
+    auth_result = await is_authenticated(update, context)
 
     # Check if the intent is 'start' or 'menu'
     if intent in ['start', 'menu']:
-        return await process_menu(update, context)
+        return await process_menu(update, context, auth_result)
 
     token = context.user_data.get('token')
-    amount = context.user_data.get('amount', None)  # Amount is optional
-    receiver = context.user_data.get('receiver', None)  # Receiver is optional
+    amount = context.user_data.get('amount')  # Optional
+    receiver = context.user_data.get('receiver')  # Optional
 
-    logger.info(f"Executing action: {intent}, Token: {token}, Amount: {amount}")
+    logger.info(f"Executing action: {intent}, Token: {token}, Amount: {amount}, Receiver: {receiver}")
 
-
-    # Authentication check if required
+    # Check authentication for specific intents
     if intent in AUTHENTICATED_COMMANDS:
-        auth_link_response = await is_authenticated(context)
-        if auth_link_response is not True:
+        if 'url' in auth_result:  # Not authenticated
             logger.info(f"User not authenticated for {intent}.")
-            return await login_card(update, context, auth_link_response)  # Call login_prompt with the URL
-
+            return await login_card(update, context, auth_result)  # Redirect to login
 
     # Execute the corresponding action based on intent
     if intent == 'trade':
-        actions.process_trade(update, token)
+        actions.process_trade(update, context)
     elif intent == 'pay':
-        actions.process_pay(update, token, amount, receiver)
+        actions.process_pay(update, context)
     elif intent == 'request':
-        actions.process_request(update, token, amount, receiver)
+        actions.process_request(update, context)
     else:
         logger.error(f"Unknown intent: {intent}")
         await update.message.reply_text("An error occurred. Please try again.")
@@ -88,4 +85,5 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info(f"Action {intent} completed successfully. Clearing user data.")
     context.user_data.clear()
     return ConversationHandler.END
+
 

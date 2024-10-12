@@ -1,4 +1,4 @@
-import logging
+from config import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from utils.getToken import get_token  # Import the function to get token data
 from utils.reply import reply  # Import the reply function

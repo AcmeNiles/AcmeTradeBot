@@ -1,9 +1,6 @@
-import logging
+from config import logger
 from telegram import Update
 from telegram.ext import ContextTypes
-
-# Setup logging
-logger = logging.getLogger(__name__)
 
 # Parse and validate the amount
 def parse_amount(amount_text: str) -> float:

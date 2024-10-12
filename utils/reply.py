@@ -1,6 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from config import MENU_IMAGE_URL
-import logging
+from config import logger
 
 logger = logging.getLogger(__name__)
 

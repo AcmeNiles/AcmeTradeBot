@@ -1,13 +1,9 @@
-import logging
 import requests
-from config import URL, ACME_URL, ACME_API_KEY
-
-# Set up logging
-logger = logging.getLogger(__name__)
+from config import URL, ACME_URL, ACME_API_KEY, logger
 
 async def set_acme_webhook():
     # ACME webhook setup URL and headers
-    acme_api = ACME_URL + "user/set-web-hook"
+    acme_api = f"{ACME_URL}/user/set-web-hook"
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -16,13 +12,13 @@ async def set_acme_webhook():
 
     # Data payload with the Replit URL as the webhook target
     data = {
-        "webHookUrl": URL + "/acme"
+        "webHookUrl": f"{URL}/acme"  # Using f-string for better readability
     }
-
+    
     logger.info("Preparing to set ACME webhook.")
-    logger.debug(f"ACME API URL: {acme_api}")
-    logger.debug(f"Headers: {headers}")
-    logger.debug(f"Payload: {data}")
+    logger.info(f"ACME API URL: {acme_api}")
+    logger.info(f"Headers: {headers}")
+    logger.info(f"Payload: {data}")
 
     try:
         # Make the POST request to set the webhook

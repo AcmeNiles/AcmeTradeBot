@@ -1,9 +1,7 @@
-import logging
+from config import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 #from config import ASK_PAY_TICKER, TRADE_CARD, ASK_AMOUNT
-
-logger = logging.getLogger(__name__)
 
 async def ask_ticker(update: Update, context: CallbackContext, intent: str = "trade") -> int:
     logger.debug(f"Entering ask_ticker function with intent: {intent}")

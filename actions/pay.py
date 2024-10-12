@@ -1,4 +1,4 @@
-import logging
+from config import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import (
     CallbackContext,  # Fixed the import to use CallbackContext correctly
@@ -15,10 +15,6 @@ from config import MENU_IMAGE_URL
 from utils.checkTicker import check_ticker
 from utils.createJWT import get_user_data
 from commands.ticker import ask_ticker
-
-# Setup logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 ### State 1: Pay Flow Start - Ask for Ticker ###
 async def start_pay(update: Update, context: CallbackContext) -> int:

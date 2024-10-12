@@ -1,16 +1,10 @@
-import logging
+from config import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
 
 from telegram.ext import ConversationHandler, ContextTypes
 from config import *
 from handlers.action_handler import route_action
 
-# Setup logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
-)
 # Main Handler: Routes commands to route_action or menu
 async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
