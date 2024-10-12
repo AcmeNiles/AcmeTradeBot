@@ -14,7 +14,7 @@ ACME_URL = "https://acme-prod.fly.dev/operations/dev/"
 # Production
 URL = "https://acmeonetap.replit.app"
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_GROUP = "@acmeonetap"  # Replace with your group's chat ID or username
+ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
 
 # Define conversation states
 SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)
