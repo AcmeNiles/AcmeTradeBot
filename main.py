@@ -53,14 +53,11 @@ async def main():
         ],
         allow_reentry=True
     )
-
-
     # Add the conversation handler to the application
     application.add_handler(conv_handler)
 
     # Pass webhook settings to telegram and acme
     await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
-    
     await set_acme_webhook()
 
     # Set up webserver
