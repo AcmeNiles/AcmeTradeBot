@@ -59,7 +59,7 @@ async def set_acme_webhook():
 # Main function to set up the bot
 async def main():
     # Replace 'YOUR_TOKEN' with your actual bot token
-    application = ApplicationBuilder().token(TOKEN).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Define the conversation handler
     conv_handler = ConversationHandler(

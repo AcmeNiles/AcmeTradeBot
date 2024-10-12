@@ -8,13 +8,13 @@ ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
 # Dev
 #URL = os.getenv("DEV_URL")
-#TOKEN = os.getenv("DEV_TOKEN")
+#BOT_TOKEN = os.getenv("DEV_TOKEN")
 #ACME_GROUP = os.getenv("DEV_ACME_GROUP")  # Replace with your group's chat ID or username
 #ACME_URL = os.getenv("ACME_DEV_URL")
 
 # Production
 URL = os.getenv("URL")
-TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ACME_GROUP = os.getenv("ACME_GROUP")  # Replace with your group's chat ID or username
 ACME_URL = os.getenv("ACME_PROD_URL")
 
