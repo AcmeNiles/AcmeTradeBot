@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED True
 WORKDIR /app
 
 # Copy requirements and install before copying code for faster builds
-COPY requirements requirements
+COPY requirements.txt requirements.txt
 
 # install requirements
 RUN pip install -r requirements.txt
