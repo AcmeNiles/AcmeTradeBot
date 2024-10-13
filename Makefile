@@ -1,4 +1,4 @@
-.PHONY: test, install, install-dev, teardown
+.PHONY: test, install, teardown
 
 install:
 	@pip install -r requirements.txt
