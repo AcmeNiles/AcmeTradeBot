@@ -15,14 +15,14 @@ async def set_acme_webhook():
         "webHookUrl": f"{URL}/acme"  # Using f-string for better readability
     }
     
-    logger.info("Preparing to set ACME webhook.")
-    logger.info(f"ACME API URL: {acme_api}")
-    logger.info(f"Headers: {headers}")
-    logger.info(f"Payload: {data}")
+    logger.debug("Preparing to set ACME webhook.")
+    logger.debug(f"ACME API URL: {acme_api}")
+    logger.debug(f"Headers: {headers}")
+    logger.debug(f"Payload: {data}")
 
     try:
         # Make the POST request to set the webhook
-        logger.info("Sending request to set webhook...")
+        logger.debug("Sending request to set webhook...")
         response = requests.post(acme_api, json=data, headers=headers)
 
         # Print the response in the logs

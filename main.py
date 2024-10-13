@@ -56,7 +56,7 @@ async def main():
         logger.info("Conversation handler added to application.")
 
         # Pass webhook settings to telegram and acme
-        logger.debug(f"Setting up Telegram webhook with URL: {URL}/telegram")
+        logger.info(f"Setting up Telegram webhook with URL: {URL}/telegram")
         await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
 
         logger.debug("Setting ACME webhook.")

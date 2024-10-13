@@ -28,12 +28,12 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Get token input from the user
     token_text = await get_token_from_input(update, context)
     if not token_text:
-        return await prompt_for_token(update, context)
+        return await prompt_for_token(update, context, token_text=None, invalid=False)  # Ensure token_text is passed correctly
 
     # Validate and store the token
     token_data = await validate_and_store_token(token_text, update, context)
     if not token_data:
-        return await prompt_for_token(update, context, invalid=True)
+        return await prompt_for_token(update, context, token_text=token_text, invalid=True)
 
     # Route based on intent
     if intent in {'pay', 'request'}:
@@ -82,7 +82,7 @@ async def fetch_token_data(token_identifier: str) -> dict:
         return {"error": f"Network error: {str(e)}"}
 
 def extract_token_data(token_data: dict) -> dict | None:
-    """Extract and validate token fields, including the largest logo."""
+    """Extract and validate token fields, including financial metrics and the largest logo."""
     try:
         # Common fields
         symbol = token_data.get('symbol')
@@ -105,10 +105,17 @@ def extract_token_data(token_data: dict) -> dict | None:
         contract_address = platform_data.get('contract_address') or platforms.get(platform_key)
 
         # Handle EVM chain IDs or non-EVM platforms
-        if asset_platform in EVM_CHAIN_IDS:
-            chain_id = EVM_CHAIN_IDS[asset_platform]
-        else:
-            chain_id = asset_platform  # Non-EVM platforms retain the original string
+        chain_id = EVM_CHAIN_IDS.get(asset_platform, asset_platform)  # Retain original for non-EVM
+
+        # Financial metrics
+        price = token_data.get('market_data', {}).get('current_price', {}).get('usd')
+        mcap = token_data.get('market_data', {}).get('market_cap', {}).get('usd')
+        volume_24h = token_data.get('market_data', {}).get('total_volume', {}).get('usd')
+        change_24h = token_data.get('market_data', {}).get('price_change_percentage_24h')
+
+        # Additional useful fields
+        circulating_supply = token_data.get('market_data', {}).get('circulating_supply')
+        total_supply = token_data.get('market_data', {}).get('total_supply')
 
         # Validate extracted data
         if all([symbol, name, logo_url, chain_id, decimals, contract_address]):
@@ -120,6 +127,14 @@ def extract_token_data(token_data: dict) -> dict | None:
                 "decimals": decimals,
                 "contract_address": contract_address,
                 "platform": platform_key,
+                # Financial metrics
+                "price": price,
+                "mcap": mcap,
+                "volume_24h": volume_24h,
+                "change_24h": change_24h,
+                # Additional metrics
+                "circulating_supply": circulating_supply,
+                "total_supply": total_supply,
             }
 
         logger.warning(f"Incomplete token data: {token_data}")
@@ -129,33 +144,37 @@ def extract_token_data(token_data: dict) -> dict | None:
         logger.exception(f"Missing field: {str(e)}")
         return {"error": "Incomplete token data."}
 
-async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, invalid=False) -> int:
+async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, token_text=None, invalid=False) -> int:
     """Prompt user to enter or select a token."""
 
     logger.info("Entered prompt_for_token function.")
-
-    # Determine the message to send based on whether the token is invalid
-    message = MESSAGE_NOT_LISTED if invalid else MESSAGE_ASK_TOKEN
 
     # Check the user context for the current intent
     user_intent = context.user_data.get("intent", "trade")  # Default to 'trade'
     logger.debug(f"User intent for token selection: {user_intent}")
 
-    # Prepare buttons for token selection
-    buttons = [
-        InlineKeyboardButton(token_name, callback_data=f'/{user_intent} {token_name}')
-        for token_name in FEATURED_TOKENS
-    ]
+    # Determine the message to send and prepare buttons based on validity and token input
+    if invalid and token_text:
+        message = MESSAGE_NOT_LISTED.format(token_text=token_text.upper())  # Insert the token symbol into the message
+        buttons = [
+            InlineKeyboardButton(
+                "👋 Request Listing", 
+                url=context.user_data.get('invite_link', 'https://t.me/acmeonetap')
+            )
+        ]
+    else:
+        message = MESSAGE_ASK_TOKEN
+        buttons = [
+            InlineKeyboardButton(token_name, callback_data=f'/{user_intent} {token_name}')
+            for token_name in FEATURED_TOKENS
+        ]
 
     # Create the reply markup
     reply_markup = InlineKeyboardMarkup([buttons])
 
     # Handle both callback query and message text scenarios
     if update.callback_query:
-        # If it's a callback query, acknowledge the button click
-        await update.callback_query.answer()
-
-        # Send the message with the token selection options
+        await update.callback_query.answer()  # Acknowledge button click
         try:
             await update.callback_query.message.reply_text(
                 message, reply_markup=reply_markup, parse_mode='MarkdownV2'
@@ -164,9 +183,7 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, i
         except Exception as e:
             logger.error(f"Failed to send token selection prompt in callback: {str(e)}")
             await update.callback_query.message.reply_text("An error occurred while prompting for a token. Please try again.")
-
     else:
-        # If it's a message text, simply send the prompt
         try:
             await update.message.reply_text(
                 message, reply_markup=reply_markup, parse_mode='MarkdownV2'

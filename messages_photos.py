@@ -6,7 +6,7 @@ MARKDOWN_V2_SPECIAL_CHARS = ['~', '>', '#', '+', '-', '=', '|', '.', '!']
 
 # Define common menu messages with unescaped characters
 MENU = (
-    "\n🏦 *👋 Welcome to Acme!* \n\n"
+    "\n *👋 Welcome to Acme!* \n\n"
     "🤑 *Share to Earn*\n"
     "Share trading links and earn 50% fees + airdrops.\n\n"
     "💳 *Tap.* *Trade.* *Done*.\n"
@@ -14,16 +14,24 @@ MENU = (
     "🔒 *Own your Tokens*\n"
     "Tokens are secured in a safe. Only you have the keys.\n\n"
 )
-LOGIN = "💸 Claim access pass and start your exchange! 💸 \n"
+LOGIN = "*💸 Claim early pass. Start your exchange. Now.* 💸 \n"
 LOGGED_IN = "💸 Let's start making some money! 💸 \n"
 # Trading card text template without Markdown V2 formatting
+
 TRADE = (
     "📢 *TRADE {symbol}!*\n\n"
-    "🔗 Chain ID: {chain_id}\n"
-    "🏷️ Contract Address: {contract_address}\n"
+    "🪙 *Price*: {price}\n"
+    "📉 *24h Change*: {change_24h}\n"
+    "💰 *Market Cap*: {mcap}\n"
+    "📊 *24h Volume*: {volume_24h}\n\n"
+    "🔗 *Chain ID*: {chain_id}\n"
+    "🏷️ *Contract Address*: `{contract_address}`\n"
+    "📦 *Circulating Supply*: {circulating_supply} {symbol}\n"
+    "🔄 *Total Supply*: {total_supply} {symbol}\n"
 )
+
 # Define the message outside the function
-NOT_LISTED = "🚫 *{symbol.upper()}* is not listed. Message us to request listing:"
+NOT_LISTED = "🚫 *{token_text}* is not listed. Message us to request listing:"
 ASK_TOKEN = "*TYPE* or select the token symbol you want to trade:"
 
 # Photo URLs

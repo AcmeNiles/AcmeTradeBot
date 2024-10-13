@@ -12,6 +12,7 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
     try:
         # Generate invite link
         invite_link = await get_invite_link(update.effective_user.id, ACME_GROUP, context)
+        context.user_data['invite_link'] = invite_link
         logger.info(f"Generated invite link: {invite_link}")
     except Exception as e:
         logger.error(f"Failed to generate invite link: {str(e)}")
@@ -46,7 +47,7 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
 
             # Buttons for unauthenticated users
             buttons = [
-                [InlineKeyboardButton("👑 Claim Early Access Pass", web_app=WebAppInfo(url=minting_link))],
+                [InlineKeyboardButton("👑 Claim Early Pass", web_app=WebAppInfo(url=minting_link))],
                 [InlineKeyboardButton("📈 Trade Now", callback_data='/trade')],
                 [InlineKeyboardButton("👋 Say Hi!", url=invite_link)],
             ]

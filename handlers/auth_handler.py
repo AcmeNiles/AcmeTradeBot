@@ -54,21 +54,29 @@ async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_re
         logger.error(f"Failed to send reply photo: {e}")
 
     return WAITING_FOR_AUTH
-
 async def is_authenticated(update: Update, context: CallbackContext) -> dict:
     """
     Check if the user is authenticated based on data from create_auth_link.
     """
-    try:
-        tg_key = await create_tg_key(update)
-        if not tg_key:
-            raise ValueError("Failed to generate a valid Telegram key.")
 
-        logger.info(f"Authenticating with tg_key: {tg_key}")
-        
-        # Store tg_key in context.user_data
-        context.user_data['tg_key'] = tg_key  
-        
+    # Check if auth_result and tg_key are already cached
+    auth_result = context.user_data.get('auth_result')
+    tg_key = context.user_data.get('tg_key')
+
+    if auth_result and tg_key:
+        logger.info("Using cached tg_key and authentication result.")
+        return auth_result  # Return cached auth result if available
+
+    try:
+        # Generate a new Telegram key if not already cached
+        if not tg_key:
+            tg_key = await create_tg_key(update)
+            if not tg_key:
+                raise ValueError("Failed to generate a valid Telegram key.")
+            context.user_data['tg_key'] = tg_key  # Cache tg_key
+            logger.info(f"Generated and cached new tg_key: {tg_key}")
+
+        # Call Acme's create_auth_link API using the tg_key
         auth_data = await create_auth_link(tg_key)
 
         if 'data' not in auth_data:
@@ -76,16 +84,22 @@ async def is_authenticated(update: Update, context: CallbackContext) -> dict:
 
         data = auth_data['data']
 
+        # Handle authenticated and non-authenticated scenarios
         if 'telegramAccount' in data:
             user_id = data.get('userid')
             if not user_id:
                 raise ValueError("Missing user ID despite valid telegramAccount.")
-            return {"id": user_id}
+            auth_result = {"id": user_id}  # Store user ID if authenticated
+        elif isinstance(data, str) and data.startswith("http"):
+            auth_result = {"url": data}  # Store login URL if authentication needed
+        else:
+            raise ValueError("Unexpected authentication response: no URL or user ID found.")
 
-        if isinstance(data, str) and data.startswith("http"):
-            return {"url": data}
+        # Cache the auth_result to avoid redundant calls
+        context.user_data['auth_result'] = auth_result
+        logger.info(f"Cached authentication result: {auth_result}")
 
-        raise ValueError("Unexpected authentication response: no URL or user ID found.")
+        return auth_result
 
     except Exception as e:
         logger.exception(f"Authentication failed: {str(e)}")

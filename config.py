@@ -4,12 +4,6 @@ import sys
 
 # Initialize logger
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',  # Ensures time format
-    level=logging.DEBUG,
-    force=True  # Ensure previous logging configs are overridden
-)
 
 # Add console handler
 console_handler = logging.StreamHandler(sys.stdout)
@@ -67,7 +61,7 @@ try:
         ACME_GROUP = get_env_var("DEV_ACME_GROUP")
         # Optional DEV values – won't raise errors if not present
         ACME_URL = os.getenv("DEV_ACME_URL", "https://acme-qa.fly.dev/operations/dev")
-        ACME_API_KEY = os.getenv("DEV_ACME_KEY", "")
+        ACME_API_KEY = os.getenv("DEV_ACME_API_KEY", "")
     
 except ValueError as e:
     logger.critical(f"Startup aborted due to configuration error: {e}")
