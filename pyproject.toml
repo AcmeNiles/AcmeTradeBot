@@ -1,20 +1,20 @@
 [tool.poetry]
-name = "repl-nix-acmecoyotebot"
+name = "repl-nix-acmetradebot"
 version = "0.1.0"
 description = ""
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10.0,<3.12"
+python = "^3.10"
 asgiref = "^3.8.1"
 flask = "^3.0.3"
-uvicorn = "^0.31.0"
+requests = "^2.32.3"
+telegram = "^0.0.1"
+uvicorn = "^0.31.1"
+python-telegram-bot = "^21.0.0"
 cryptography = "^43.0.1"
-python-telegram-bot = "^21"
-requests = "^2"
-PyJWT = "^2"
-yikai-tools = "^1.0.6"
+
 
 [build-system]
 requires = ["poetry-core"]
