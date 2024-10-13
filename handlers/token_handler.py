@@ -193,31 +193,30 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, t
     if update.callback_query:
         await update.callback_query.answer()  # Acknowledge button click
         try:
-            await update.callback_query.message.reply_text(
-                message, reply_markup=reply_markup, parse_mode='MarkdownV2'
+            await update.callback_query.message.reply_photo(
+                photo=PHOTO_TRADE,
+                caption=message,
+                reply_markup=reply_markup,
+                parse_mode='MarkdownV2'
             )
             logger.info("Token selection prompt sent successfully in response to button click.")
         except Exception as e:
             logger.error(f"Failed to send token selection prompt in callback: {str(e)}")
             await update.callback_query.message.reply_text("An error occurred while prompting for a token. Please try again.")
-
-        # Send the photo
-        await update.callback_query.message.reply_photo(photo=PHOTO_TRADE)  # Add this line to send the image
     else:
         try:
-            await update.message.reply_text(
-                message, reply_markup=reply_markup, parse_mode='MarkdownV2'
+            await update.message.reply_photo(
+                photo=PHOTO_TRADE,
+                caption=message,
+                reply_markup=reply_markup,
+                parse_mode='MarkdownV2'
             )
             logger.info("Token selection prompt sent successfully in response to message text.")
         except Exception as e:
             logger.error(f"Failed to send token selection prompt in message: {str(e)}")
             await update.message.reply_text("An error occurred while prompting for a token. Please try again.")
 
-        # Send the photo
-        await update.message.reply_photo(photo=PHOTO_TRADE)  # Add this line to send the image
-
     return SELECT_TOKEN
-
 
 async def handle_intent_flow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle flow for pay/request intents."""

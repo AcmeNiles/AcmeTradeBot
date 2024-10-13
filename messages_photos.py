@@ -35,7 +35,7 @@ ASK_TOKEN = "*TYPE* or select the token symbol you want to trade:"
 
 # Photo URLs
 PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/c8896fab-49d6-48ec-f5c6-e46510dd0a00/public"
-PHOTO_TRADE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/432c3594-2f7f-4672-a276-cd11c0dfe900/public"
+PHOTO_TRADE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/ea627956-7ad1-48ba-0c09-3fd008d77500/public"
 
 PHOTO_URLS_TO_CHECK = [PHOTO_MENU, PHOTO_TRADE]
 
