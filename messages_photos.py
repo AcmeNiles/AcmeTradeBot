@@ -8,13 +8,13 @@ MARKDOWN_V2_SPECIAL_CHARS = ['~', '>', '#', '+', '-', '=', '|', '.', '!']
 MENU = (
     "\n *👋 Welcome to Acme!* \n\n"
     "🤑 *Share to Earn*\n"
-    "Share trading links and earn 50% fees + airdrops.\n\n"
+    "Share trading cards. Earn fees & rewards instantly.\n\n"
     "💳 *Tap.* *Trade.* *Done*.\n"
     "Easily buy any token with your bank card.\n\n"
     "🔒 *Own your Tokens*\n"
     "Tokens are secured in a safe. Only you have the keys.\n\n"
 )
-LOGIN = "*💸 Claim early pass. Start your exchange. Now.* 💸 \n"
+LOGIN = "*💸 Claim your early pass and start making some money!* 💸 \n"
 LOGGED_IN = "💸 Let's start making some money! 💸 \n"
 # Trading card text template without Markdown V2 formatting
 
