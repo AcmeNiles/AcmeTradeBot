@@ -11,7 +11,7 @@ console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logger.propagate = False  # Ensure no duplicate logs
 
 # Helper function to fetch environment variables
