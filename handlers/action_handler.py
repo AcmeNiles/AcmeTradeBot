@@ -7,7 +7,6 @@ from actions.trade import process_trade
 from handlers.auth_handler import is_authenticated, login_card
 from handlers.token_handler import handle_token
 
-
 # Route Action: Handles each command's routing and intent management
 async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
@@ -71,11 +70,11 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Execute the corresponding action based on intent
     if intent == 'trade':
-        actions.process_trade(update, context)
+        await process_trade(update, context)
     elif intent == 'pay':
-        actions.process_pay(update, context)
+        await process_pay(update, context)
     elif intent == 'request':
-        actions.process_request(update, context)
+        await process_request(update, context)
     else:
         logger.error(f"Unknown intent: {intent}")
         await update.message.reply_text("An error occurred. Please try again.")

@@ -80,5 +80,5 @@ SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)
 VALID_COMMANDS = {'trade', 'pay', 'request', 'token', 'share', 'vault', 'start', 'menu'}
 AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault'}
 FEATURED_TOKENS = ["PONKE", "POPCAT", "TOSHI"]  # Define featured tokens as a list of strings
-
+COINGECKO_API_URL = "https://api.coingecko.com/api/v3/coins/{token_id}"
 logger.info("Configuration successfully loaded and validated.")

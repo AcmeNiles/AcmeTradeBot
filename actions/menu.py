@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ConversationHandler, ContextTypes
 from config import logger, ACME_GROUP
 from messages_photos import PHOTO_MENU, MESSAGE_MENU, MESSAGE_LOGIN, MESSAGE_LOGGED_IN
@@ -46,10 +46,17 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
 
             # Buttons for unauthenticated users
             buttons = [
-                [InlineKeyboardButton("Claim Your Access Pass", web_app=WebAppInfo(url=minting_link))],
-                [InlineKeyboardButton("Say Hi! 👋", url=invite_link)],  # Escaped character for markdown
+                [InlineKeyboardButton("👑 Claim Early Access Pass", web_app=WebAppInfo(url=minting_link))],
+                [InlineKeyboardButton("📈 Trade Now", callback_data='/trade')],
+                [InlineKeyboardButton("👋 Say Hi!", url=invite_link)],
             ]
+            
             logger.debug(f"Buttons for unauthenticated user: {buttons}")
+            # Log all information before sending
+            logger.debug(f"Preparing to send trading card with the following details:\n"
+                         f"Photo: {local_photo_menu}\n"  # Change made here
+                         f"Caption: {local_message_menu}\n"
+                         f"Buttons: {buttons}")
 
             # Send the menu with the minting link and photo
             try:
@@ -59,7 +66,7 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
                     parse_mode="MarkdownV2",
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
-                logger.info("Menu sent to unauthenticated user")
+                logger.info("Menu sent to unauthenticated user successfully")
             except Exception as e:
                 logger.error(f"Failed to send unauthenticated user menu photo: {str(e)}")
                 await update.message.reply_text("An error occurred while sending the menu photo.")
@@ -81,7 +88,7 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
                     InlineKeyboardButton("⬆️ Pay", callback_data='/pay'),
                     InlineKeyboardButton("⬇️ Request", callback_data='/request')
                 ],
-                [InlineKeyboardButton("👋 Say Hi!", url=invite_link)]  # Escaped character for markdown
+                [InlineKeyboardButton("👋 Say Hi!", url=invite_link)]
             ]
             logger.debug(f"Buttons for authenticated user: {buttons}")
 
@@ -93,21 +100,18 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
                     parse_mode="MarkdownV2",
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
-                logger.info("Menu sent to authenticated user")
+                logger.info("Menu sent to authenticated user successfully")
             except Exception as e:
                 logger.error(f"Failed to send authenticated user menu photo: {str(e)}")
                 await update.message.reply_text("An error occurred while sending the menu photo.")
 
     except ValueError as ve:
-        # Handle specific value errors for missing message or photo
         logger.error(f"ValueError: {str(ve)}")
         await update.message.reply_text(f"An error occurred: {str(ve)}")
 
     except Exception as e:
-        # Catch-all for other exceptions during the process
         logger.error(f"Failed to process menu: {str(e)}")
         await update.message.reply_text("An error occurred while processing the menu. Please try again later.")
-
 
 
 # Updated get_invite_link function
@@ -134,8 +138,6 @@ async def get_invite_link(user_id: int, chat_id: str, context: ContextTypes.DEFA
 
     except Exception as e:
         logger.error(f"Failed to check membership or generate invite link: {str(e)}")
-
-        # Return a fallback invite link to handle the error gracefully
         fallback_link = "https://t.me/joinchat/fallbackInviteLink"
         logger.warning(f"Returning fallback invite link: {fallback_link}")
         return fallback_link

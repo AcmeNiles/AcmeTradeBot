@@ -3,10 +3,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 
 from telegram.ext import ConversationHandler, ContextTypes
 from config import *
-from handlers.action_handler import route_action
 
 # Main Handler: Routes commands to route_action or menu
 async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from handlers.action_handler import route_action
     """
     Main handler that routes user input to the appropriate action or menu.
     """

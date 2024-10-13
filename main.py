@@ -61,8 +61,6 @@ async def main():
 
         logger.debug("Setting ACME webhook.")
         await set_acme_webhook()
-        # Call verification function to ensure messages are processed
-        logger.warning(f"FINAL MESSAGE: {MESSAGE_MENU}")
 
     except Exception as e:
         logger.error(f"Error during bot and webhook setup: {str(e)}")

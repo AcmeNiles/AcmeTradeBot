@@ -1,7 +1,7 @@
 import requests
 from config import ACME_API_KEY, ACME_URL, logger
 
-def create_trading_link(tg_key: str, chain_id: str, token_address: str, redirect_url: str) -> str:
+async def create_trading_link(tg_key: str, chain_id: str, token_address: str, redirect_url: str) -> str:
     """
     Create a trading link using the provided parameters and Telegram key.
 

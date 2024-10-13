@@ -2,29 +2,29 @@ import requests
 from config import logger
 
 # Markdown V2 special characters
-MARKDOWN_V2_SPECIAL_CHARS = ['[', ']', '(', ')', '~', '>', '#', '+', '-', '=', '|', '.', '!']
+MARKDOWN_V2_SPECIAL_CHARS = ['~', '>', '#', '+', '-', '=', '|', '.', '!']
 
 # Define common menu messages with unescaped characters
 MENU = (
-    "\n👋 *Welcome to Acme*! \n\n"
-    "💳 *Tap.* *Trade.* *Done*.\n"
-    "Easily buy any token with your bank card.\n\n"
+    "\n🏦 *👋 Welcome to Acme!* \n\n"
     "🤑 *Share to Earn*\n"
     "Share trading links and earn 50% fees + airdrops.\n\n"
+    "💳 *Tap.* *Trade.* *Done*.\n"
+    "Easily buy any token with your bank card.\n\n"
     "🔒 *Own your Tokens*\n"
     "Tokens are secured in a safe. Only you have the keys.\n\n"
 )
-LOGIN = "Claim your access pass and start making some money! 💸 \n"
-LOGGED_IN = "Let's start making some money! 💸 \n"
+LOGIN = "💸 Claim access pass and start your exchange! 💸 \n"
+LOGGED_IN = "💸 Let's start making some money! 💸 \n"
 # Trading card text template without Markdown V2 formatting
 TRADE = (
-    "📢 Trade {symbol}!\n\n"
+    "📢 *TRADE {symbol}!*\n\n"
     "🔗 Chain ID: {chain_id}\n"
     "🏷️ Contract Address: {contract_address}\n"
 )
 # Define the message outside the function
-NOT_LISTED = "🚫 This token is not listed. Please [contact us](https://t.me/acmeonetap) to request listing:"
-ASK_TOKEN = "TYPE or select the token symbol you want to trade:"
+NOT_LISTED = "🚫 *{symbol.upper()}* is not listed. Message us to request listing:"
+ASK_TOKEN = "*TYPE* or select the token symbol you want to trade:"
 
 # Photo URLs
 PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public"
