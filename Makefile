@@ -1,7 +1,7 @@
 .PHONY: test, install, install-dev, teardown
 
 install:
-	@pip install -r requirements/core-requirements.txt
+	@pip install -r requirements.txt
 
 install-dev: install
 	@pip install -r requirements/dev-requirements.txt
