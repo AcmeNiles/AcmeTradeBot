@@ -5,3 +5,5 @@ requests==2.32.3
 uvicorn==0.31.1
 cryptography==43.0.1
 telegram
+flake8==6.0.0
+importlib-metadata<5.0
