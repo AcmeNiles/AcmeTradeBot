@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements requirements
 
 # install requirements
-RUN pip install -r requirements/core-requirements.txt
+RUN pip install -r requirements.txt
 
 # Set non-root user
 RUN groupadd -r service && useradd --no-log-init -r -g service service
