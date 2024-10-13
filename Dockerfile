@@ -18,7 +18,11 @@ RUN groupadd -r service && useradd --no-log-init -r -g service service
 USER service
 
 # Copy local code to the container image.
-COPY src src
+COPY actions actions
+COPY handlers handlers
+COPY utils utils
+COPY config.py config.py
+COPY messages_photos.py messages_photos.py
 COPY main.py main.py
 
 ENTRYPOINT ["python", "main.py"]
