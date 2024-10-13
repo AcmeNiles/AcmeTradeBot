@@ -19,24 +19,23 @@ LOGGED_IN = "💸 Let's start making some money! 💸 \n"
 # Trading card text template without Markdown V2 formatting
 
 TRADE = (
-    "📢 *TRADE {symbol}!*\n\n"
-    "🪙 *Price*: {price}\n"
-    "📉 *24h Change*: {change_24h}\n"
-    "💰 *Market Cap*: {mcap}\n"
-    "📊 *24h Volume*: {volume_24h}\n\n"
-    "🔗 *Chain ID*: {chain_id}\n"
-    "🏷️ *Contract Address*: `{contract_address}`\n"
-    "📦 *Circulating Supply*: {circulating_supply} {symbol}\n"
-    "🔄 *Total Supply*: {total_supply} {symbol}\n"
+    "📢 Trade *{symbol}*\n\n"
+    "🪙 Price: *{price}*\n"
+    "📈 24h Change: *``{change_24h}*\n\n"
+    "💰 Market Cap: *${mcap}*\n"
+    "📊 24h Volume: *${volume_24h}*\n\n"
+    "🔄 Circulating Supply: *{circulating_supply}*\n"
+    "📦 Total Supply: *{total_supply}*\n"
 )
+
 
 # Define the message outside the function
 NOT_LISTED = "🚫 *{token_text}* is not listed. Message us to request listing:"
 ASK_TOKEN = "*TYPE* or select the token symbol you want to trade:"
 
 # Photo URLs
-PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public"
-PHOTO_TRADE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public"
+PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/c8896fab-49d6-48ec-f5c6-e46510dd0a00/public"
+PHOTO_TRADE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/432c3594-2f7f-4672-a276-cd11c0dfe900/public"
 
 PHOTO_URLS_TO_CHECK = [PHOTO_MENU, PHOTO_TRADE]
 

@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 import requests
 from config import logger, SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, FEATURED_TOKENS, COINGECKO_API_URL
-from messages_photos import MESSAGE_ASK_TOKEN, MESSAGE_NOT_LISTED
+from messages_photos import MESSAGE_ASK_TOKEN, MESSAGE_NOT_LISTED, PHOTO_TRADE
 
 # EVM Chain ID Mapping
 EVM_CHAIN_IDS = {
@@ -15,6 +15,7 @@ EVM_CHAIN_IDS = {
 }
 
 async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    import time
     from handlers.input_handler import input_to_action
     from handlers.action_handler import execute_action
 
@@ -26,21 +27,37 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return await input_to_action(update, context)
 
     # Get token input from the user
+    start_time = time.time()
     token_text = await get_token_from_input(update, context)
+    execution_time = time.time() - start_time
+    logger.info(f"get_token_from_input took {execution_time:.2f} seconds.")
+
     if not token_text:
-        return await prompt_for_token(update, context, token_text=None, invalid=False)  # Ensure token_text is passed correctly
+        return await prompt_for_token(update, context, token_text=None, invalid=False)
 
     # Validate and store the token
+    start_time = time.time()
     token_data = await validate_and_store_token(token_text, update, context)
+    execution_time = time.time() - start_time
+    logger.info(f"validate_and_store_token took {execution_time:.2f} seconds.")
+
     if not token_data:
         return await prompt_for_token(update, context, token_text=token_text, invalid=True)
 
     # Route based on intent
     if intent in {'pay', 'request'}:
-        return await handle_intent_flow(update, context)
+        start_time = time.time()
+        result = await handle_intent_flow(update, context)
+        execution_time = time.time() - start_time
+        logger.info(f"handle_intent_flow took {execution_time:.2f} seconds.")
+        return result
 
     # Execute trade directly
-    return await execute_action(update, context)
+    start_time = time.time()
+    result = await execute_action(update, context)
+    execution_time = time.time() - start_time
+    logger.info(f"execute_action took {execution_time:.2f} seconds.")
+    return result
 
 async def get_token_from_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str | None:
     """Extract token from message or callback query."""
@@ -127,14 +144,14 @@ def extract_token_data(token_data: dict) -> dict | None:
                 "decimals": decimals,
                 "contract_address": contract_address,
                 "platform": platform_key,
-                # Financial metrics
-                "price": price,
-                "mcap": mcap,
-                "volume_24h": volume_24h,
-                "change_24h": change_24h,
-                # Additional metrics
-                "circulating_supply": circulating_supply,
-                "total_supply": total_supply,
+                # Financial metrics with separate formatting function
+                "price": format_financial_metrics(price, "price"),
+                "mcap": format_financial_metrics(mcap, "mcap"),
+                "volume_24h": format_financial_metrics(volume_24h, "volume"),
+                "change_24h": f"{change_24h:.2f}%" if change_24h is not None else "N/A",
+                # Additional metrics formatted for millions, billions, and trillions without suffix
+                "circulating_supply": format_financial_metrics(circulating_supply, "circulating_supply"),
+                "total_supply": format_financial_metrics(total_supply, "total_supply"),
             }
 
         logger.warning(f"Incomplete token data: {token_data}")
@@ -143,7 +160,7 @@ def extract_token_data(token_data: dict) -> dict | None:
     except KeyError as e:
         logger.exception(f"Missing field: {str(e)}")
         return {"error": "Incomplete token data."}
-
+        
 async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, token_text=None, invalid=False) -> int:
     """Prompt user to enter or select a token."""
 
@@ -183,6 +200,9 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         except Exception as e:
             logger.error(f"Failed to send token selection prompt in callback: {str(e)}")
             await update.callback_query.message.reply_text("An error occurred while prompting for a token. Please try again.")
+
+        # Send the photo
+        await update.callback_query.message.reply_photo(photo=PHOTO_TRADE)  # Add this line to send the image
     else:
         try:
             await update.message.reply_text(
@@ -192,6 +212,9 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         except Exception as e:
             logger.error(f"Failed to send token selection prompt in message: {str(e)}")
             await update.message.reply_text("An error occurred while prompting for a token. Please try again.")
+
+        # Send the photo
+        await update.message.reply_photo(photo=PHOTO_TRADE)  # Add this line to send the image
 
     return SELECT_TOKEN
 
@@ -213,3 +236,23 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Prompt user for amount."""
     await update.message.reply_text("Enter the amount:")
     return SELECT_AMOUNT
+
+def format_financial_metrics(value: float, metric_type: str) -> str:
+    """Format financial metrics (price, market cap, volume, supply) for display."""
+    if value is None:
+        return "N/A"
+
+    if metric_type == "price":
+        return f"${value:,.8f}" if value < 0.01 else f"${value:,.2f}"
+
+    if metric_type in {"mcap", "volume", "circulating_supply", "total_supply"}:
+        if value >= 1_000_000_000_000:
+            return f"{value / 1_000_000_000_000:.2f}T"
+        elif value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:.2f}B"
+        elif value >= 1_000_000:
+            return f"{value / 1_000_000:.2f}M"
+        else:
+            return f"{value:,.0f}"
+
+    return "N/A"

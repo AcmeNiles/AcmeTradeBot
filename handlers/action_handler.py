@@ -47,6 +47,8 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """
     Executes the action based on the user's intent, token, amount, and receiver.
     """
+    import time
+
     intent = context.user_data.get('intent')
 
     # Retrieve tg_key and auth_result from user context
@@ -55,9 +57,9 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Authenticate if not already cached
     if not auth_result or not tg_key:
+        start_time = time.time()  # Start timing authentication
         auth_result = await is_authenticated(update, context)
-
-        # Log the newly authenticated result
+        logger.info(f"is_authenticated took {time.time() - start_time:.2f} seconds.")
         logger.info(f"New authentication result: {auth_result}")
 
     # Log the retrieved or newly fetched auth result and tg_key
@@ -66,7 +68,10 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Handle 'start' or 'menu' intents
     if intent in ['start', 'menu']:
-        return await process_menu(update, context, auth_result)
+        start_time = time.time()  # Start timing process_menu
+        result = await process_menu(update, context, auth_result)
+        logger.info(f"process_menu took {time.time() - start_time:.2f} seconds.")
+        return result
 
     # Retrieve other necessary data from user context
     token = context.user_data.get('token')
@@ -79,15 +84,24 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if intent in AUTHENTICATED_COMMANDS and 'url' in auth_result:
         # User not authenticated; redirect to login
         logger.info(f"User not authenticated for {intent}. Redirecting to login.")
-        return await login_card(update, context, auth_result)
+        start_time = time.time()  # Start timing login_card
+        result = await login_card(update, context, auth_result)
+        logger.info(f"login_card took {time.time() - start_time:.2f} seconds.")
+        return result
 
     # Execute the appropriate action based on the user's intent
     if intent == 'trade':
+        start_time = time.time()  # Start timing process_trade
         await process_trade(update, context)
+        logger.info(f"process_trade took {time.time() - start_time:.2f} seconds.")
     elif intent == 'pay':
+        start_time = time.time()  # Start timing process_pay
         await process_pay(update, context)
+        logger.info(f"process_pay took {time.time() - start_time:.2f} seconds.")
     elif intent == 'request':
+        start_time = time.time()  # Start timing process_request
         await process_request(update, context)
+        logger.info(f"process_request took {time.time() - start_time:.2f} seconds.")
     else:
         logger.error(f"Unknown intent: {intent}")
         await update.message.reply_text("An error occurred. Please try again.")
@@ -106,5 +120,6 @@ async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         'auth_result': auth_result,
         'tg_key': tg_key
     })
+
 
     return ConversationHandler.END

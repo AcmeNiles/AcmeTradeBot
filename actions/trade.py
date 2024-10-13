@@ -69,8 +69,6 @@ async def process_trade(update: Update, context: CallbackContext) -> int:
                 change_24h=change_24h,  # Keep the 24h change as a string
                 mcap=mcap,  # Keep the market cap as a string
                 volume_24h=volume_24h,  # Keep the 24h volume as a string
-                chain_id=chain_id,  # Assuming chain_id is already a string
-                contract_address=contract_address,  # Assuming contract_address is already a string
                 circulating_supply=circulating_supply,  # Keep circulating supply as a string
                 total_supply=total_supply  # Keep total supply as a string
             ))
