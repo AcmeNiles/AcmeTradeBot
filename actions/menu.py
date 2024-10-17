@@ -32,27 +32,21 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_
             logger.error("PHOTO_MENU is missing or None.")
             raise ValueError("PHOTO_MENU is not available.")
 
-        logger.debug(f"Loaded local_message_menu: {local_message_menu}")
-        logger.debug(f"Loaded local_photo_menu: {local_photo_menu}")
-
         # Handle unauthenticated user
         if 'url' in auth_result:
             logger.info("User is not authenticated, showing minting link")
 
             minting_link = auth_result.get('url', "https://bit.ly/iamcoyote")
             logger.debug(f"Using minting link: {minting_link}")
-
             local_message_menu += MESSAGE_LOGIN
-            logger.debug(f"Updated local_message_menu for unauthenticated user: {local_message_menu}")
 
             # Buttons for unauthenticated users
             buttons = [
-                [InlineKeyboardButton("👑 Claim Early Pass", web_app=WebAppInfo(url=minting_link))],
-                [InlineKeyboardButton("📈 Trade Now", callback_data='/trade')],
+                [InlineKeyboardButton("🤑 Start Your Exchange", callback_data='/list ponke mew')],
+                [InlineKeyboardButton("📈 Trade Now", callback_data='/trade ponke')],
                 [InlineKeyboardButton("👋 Say Hi!", url=invite_link)],
             ]
             
-            logger.debug(f"Buttons for unauthenticated user: {buttons}")
             # Log all information before sending
             logger.debug(f"Preparing to send trading card with the following details:\n"
                          f"Photo: {local_photo_menu}\n"  # Change made here

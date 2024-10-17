@@ -1,4 +1,5 @@
 import logging
+import json
 from http import HTTPStatus
 import asyncio
 import uvicorn
@@ -16,12 +17,12 @@ from telegram.ext import (
     filters
 )
 
-from handlers.action_handler import execute_action
+from handlers.action_handler import execute_action, route_action
 from handlers.input_handler import input_to_action
 from handlers.token_handler import handle_token
 from handlers.amount_handler import handle_amount
 from handlers.receiver_handler import handle_recipient
-from utils.webhook import set_acme_webhook
+from utils.webhook import set_acme_webhook, validate_signature, process_acme_payload
 
 # Main function to set up the bot
 async def main():
@@ -35,18 +36,19 @@ async def main():
         # Define the conversation handler
         conv_handler = ConversationHandler(
             entry_points=[
-                CommandHandler(['start', 'menu', 'trade', 'pay', 'request', 'vault'], input_to_action),
+                CommandHandler(['start', 'menu', 'trade', 'pay', 'request','list', 'share','vault'], input_to_action),
                 CallbackQueryHandler(input_to_action),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)  # Catch any text that isn't a command
             ],
             states={
-                SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_token)],
-                SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount)],
-                SELECT_RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recipient)],
+                SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
+                SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
+                SELECT_RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
                 WAITING_FOR_AUTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, execute_action)]
             },
             fallbacks=[
-                MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)  # Catch any text that isn't a command
+                MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action),  # Catch any text that isn't a command
+                CallbackQueryHandler(input_to_action)
             ],
             allow_reentry=True
         )
@@ -91,35 +93,26 @@ async def main():
 
     @flask_app.post("/acme")
     async def acme() -> Response:
-        """Handle incoming Acme webhook requests."""
         logger.debug("Received an update from Acme.")
 
-        # Accessing the incoming request data
-        _message = request.json  # Get the JSON body
-        _signature = request.headers.get("acme-signature")  # Get the signature from the headers
-
-        logger.debug(f"Acme message received: {_message}, signature: {_signature}")
-
-        # Process the message after successful signature verification
         try:
-            order = _message["order"]
-            logger.info(f"Processing Acme order: {order}")
+            _message = request.json
+            _signature = request.headers.get("acme-signature")
 
-            update = WebhookUpdate(
-                id=order["id"],
-                status=order["status"],
-                created_at=order["createdAt"],
-                blockchain_tx_hash=order.get("blockchainTransactionHash", ""),
-                execution_message=order.get("executionMessage", ""),
-                intent_id=order["intentId"],
-                intent_memo=order.get("intentMemo", ""),
-                user_id=order["userId"]
-            )
+            #logger.debug(f"Acme message received: {_message}, signature: {_signature}")
 
-            await application.update_queue.put(update)
-            logger.info(f"Acme update processed successfully for order ID: {order['id']}")
+            public_key_pem = ACME_WEBHOOK_PEM
+            message = json.dumps(_message)
+
+            #if not validate_signature(public_key_pem, message, _signature):
+            #    logger.error("Invalid signature detected")
+            #   return Response(status=HTTPStatus.UNAUTHORIZED)
+
+            update = process_acme_payload(_message, _signature)
+            await application.update_queue.put(update)            
+            logger.info(f"Acme update processed successfully: {update}")
             return Response(status=HTTPStatus.OK)
-
+            
         except KeyError as e:
             logger.warning(f"Missing expected key in Acme message: {e}")
             return Response(status=HTTPStatus.BAD_REQUEST)

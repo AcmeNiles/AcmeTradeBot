@@ -1,5 +1,6 @@
-modules = ["python-3.10", "nix"]
+modules = ["python-3.12", "nix"]
 run = "python main.py"
+compile = "make"
 
 [nix]
 channel = "stable-24_05"
@@ -13,11 +14,8 @@ requiredFiles = [".replit", "replit.nix"]
 [deployment]
 run = ["sh", "-c", "python main.py"]
 deploymentTarget = "cloudrun"
+build = ["sh", "-c", "make"]
 
 [[ports]]
 localPort = 80
 externalPort = 80
-
-[[ports]]
-localPort = 8000
-externalPort = 8000

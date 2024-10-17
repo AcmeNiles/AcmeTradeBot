@@ -33,102 +33,85 @@ async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return ConversationHandler.END
     
     # Get the input from the update
-    input_data = await get_input(update, context)
+    input_data = await extract_input(update, context)
     logger.debug(f"Received input_data: {input_data}")
 
-    if not input_data:
-        logger.error("No valid input received (neither callback nor message).")
-        return await handle_message(update, context)
+    logger.info("Routing action based on intent.")
+    return await route_action(update, context)
 
-    # Split the input into parts
-    parts = input_data.split()
-    logger.debug(f"Input split into parts: {parts}")
+async def extract_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Extract tokens, receiver, amount, and intent, storing them in context.user_data."""
 
-    # Handle callback queries that might not start with '/'
+    # Determine the relevant input text
+    input_text = await get_input_text(update)
+    logger.debug(f"Received input text: {input_text}")
+
+    # Initialize extraction variables
+    intent, new_tokens, receiver, amount = None, [], None, None
+
+    # Process input text by splitting into parts
+    for part in input_text.split():
+        if part.startswith('/'):
+            intent = part[1:]  # Remove '/' from the intent
+            logger.debug(f"Intent detected: {intent}")
+        elif part.startswith('@'):
+            receiver = part[1:]  # Remove '/' from the intent
+            logger.debug(f"Receiver detected: {receiver}")
+        elif is_valid_float(part):
+            amount = part
+            logger.debug(f"Amount detected: {amount}")
+        else:
+            new_tokens.append(part.lower())
+            logger.debug(f"Token detected: {part.lower()}")
+
+    # Update context.user_data
+    await update_user_data(context, new_tokens, receiver, amount, intent)
+
+async def get_input_text(update: Update) -> str:
+    """Extract relevant input text from the update with detailed logging."""
+    logger.debug("Entering get_input_text function.")
+
     if update.callback_query:
-        command = parts[0].lstrip('/')
-        logger.debug(f"Callback query detected. Command: {command}")
-    else:
-        command = parts[0].lstrip('/')
-        logger.debug(f"Regular message detected. Command: {command}")
 
-
-    # Check if the command is a valid one
-    if command in VALID_COMMANDS:
-        logger.info(f"Command recognized: {command}")
-        # Store intent without leading '/'
-        context.user_data['intent'] = command  
-
-        # Handle additional parameters as before...
-        if len(parts) >= 2:
-            context.user_data['token'] = parts[1]
-            logger.debug(f"Token set: {context.user_data['token']}")
-
-        if len(parts) >= 3:
-            if parts[2].isdigit():
-                context.user_data['amount'] = parts[2]
-                logger.debug(f"Amount set: {context.user_data['amount']}")
-            else:
-                context.user_data['receiver'] = parts[2]
-                logger.debug(f"Receiver set: {context.user_data['receiver']}")
-
-        if len(parts) >= 4:
-            context.user_data['receiver'] = parts[3]
-            logger.debug(f"Receiver updated: {context.user_data['receiver']}")
-
-        logger.info("Routing action based on intent.")
-        return await route_action(update, context)
-
-    else:
-        # Redirect to menu for unrecognized commands
-        logger.warning(f"Unrecognized command in input: {command}. Redirecting to menu.")
-        context.user_data['intent'] = 'menu'
-        logger.info("Setting intent to 'menu' and executing menu action.")
-        return await route_action(update, context)  # Ensure this calls the correct function for the menu.
-
-# Function to extract input from callback or message
-async def get_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
-    """
-    Extract input from either a callback query or a message.
-    """
-    if update.callback_query:
-        logger.debug("Callback query received.")
         query = update.callback_query
-        await query.answer()  # Acknowledge button press
-        input_data = query.data.strip().lower()
-        logger.debug(f"Callback data: {input_data}")
-        return input_data
+        await query.answer()  # Acknowledge the callback query
+        callback_data = query.data.strip()  # Strip whitespace from the callback data
+        # Log the callback data
+        logger.debug(f"Callback data received: {callback_data}")
+        return callback_data
+        
     elif update.message:
-        logger.debug("Message received.")
-        input_data = update.message.text.strip().lower()
-        logger.debug(f"User input: {input_data}")
-        return input_data
-    return None
+        logger.debug("Received a regular message.")
+        message_text = update.message.text.strip()
+        logger.debug(f"Extracted message text from regular message: '{message_text}'")
+        return message_text
+
+    logger.debug("No valid message found in the update; returning an empty string.")
+    return ''
 
 
-def parse_amount(amount_text: str) -> float:
-    """
-    Parse and validate the amount from user input.
-    Replace with actual amount parsing logic.
-    """
+async def update_user_data(context: ContextTypes.DEFAULT_TYPE, new_tokens: list, receiver: str, amount: str, intent: str) -> None:
+    """Update user context with new tokens, receiver, amount, and intent."""
+    existing_tokens = set(context.user_data.get("token", []))
+    combined_tokens = list(existing_tokens | set(new_tokens))  # Union to avoid duplicates
+    logger.debug(f"Combined tokens: {combined_tokens}")
+
+    # Only set the intent if it doesn't already exist in context
+    if "intent" not in context.user_data:
+        context.user_data["intent"] = intent
+        logger.debug(f"Intent stored: {intent}")
+
+    context.user_data.update({
+        "token": combined_tokens,
+        "receiver": receiver or context.user_data.get("receiver"),
+        "amount": amount or context.user_data.get("amount"),
+    })
+    logger.debug(f"Updated context.user_data: {context.user_data}")
+
+def is_valid_float(value: str) -> bool:
+    """Check if the provided value is a valid float or integer."""
     try:
-        amount = float(amount_text.strip())
-        return amount
+        float(value)
+        return True
     except ValueError:
-        return None
-
-# Handler for collecting amount
-async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Handles the user's amount input and proceeds to execute the action.
-    """
-    amount_text = update.message.text
-    amount = parse_amount(amount_text)
-    if amount is not None:
-        context.user_data['amount'] = amount
-        logger.debug(f"Amount received: {amount}")
-        return await execute_action(update, context)
-    else:
-        logger.debug("Invalid amount entered.")
-        await update.message.reply_text("Please enter a valid amount:")
-        return SELECT_AMOUNT
+        return False

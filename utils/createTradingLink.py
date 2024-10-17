@@ -17,6 +17,11 @@ async def create_trading_link(tg_key: str, chain_id: str, token_address: str, re
     Raises:
         ValueError: If any required argument is missing or if the API request fails.
     """
+    
+    # Construct the request URL
+    #url = f"{ACME_URL}/intent/create-buy-purchase-link-intent"
+    url = "https://acme-prod.fly.dev/operations/dev/intent/create-buy-purchase-link-intent"
+    ACME_API_KEY = "PRCAEUY-LA6UTNQ-XYL5DEI-ZNUEMDA"
     # Prepare the headers with API key and tg_key
     headers = {
         "accept": "application/json",
@@ -25,22 +30,28 @@ async def create_trading_link(tg_key: str, chain_id: str, token_address: str, re
         'X-Secure-TG-User-Info': tg_key  # Include tg_key in headers
     }
 
+    chain_id = str(chain_id)
+    logger.debug("CHAIN ID IS %s", chain_id)
+    logger.debug(chain_id == "1151111081099710")
+    # Modify the chain ID if it matches the specific value (string comparison)
+    if chain_id == "1151111081099710":
+        chain_id = 'solana'
+
     # Prepare the payload using function arguments
     payload = {
-        "chainId": chain_id,
-        "tokenAddress": token_address,
-        "redirectUrl": redirect_url
+        "chainId": f"{chain_id}",  # Use f-string for chainId
+        "tokenAddress": f"{token_address}",  # Use f-string for tokenAddress
+        "redirectUrl": f"{redirect_url}"  # Use f-string for redirectUrl
     }
-
-    # Construct the request URL
-    url_to_post = f"{ACME_URL}/intent/create-buy-purchase-link-intent"
-
+    
     try:
+        logger.debug(f"Calling Trade: {url} {headers} {payload}")
+
         # Send POST request
-        response = requests.post(url_to_post, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers)
 
         # Log the response for debugging purposes
-        logger.debug(f"POST request sent to: {url_to_post}, Response: {response.status_code}, Content: {response.content}")
+        logger.debug(f"POST request sent to: {url}, Response: {response.status_code}, Content: {response.content}")
 
         # Check if the response status is OK (200)
         if response.status_code == 200:

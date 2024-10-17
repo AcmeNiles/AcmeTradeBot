@@ -11,7 +11,7 @@ console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 logger.propagate = False  # Ensure no duplicate logs
 
 # Helper function to fetch environment variables
@@ -37,23 +37,21 @@ try:
         logger.critical(f"Invalid ENV value: {env}")
         raise ValueError(f"Invalid ENV value: {env}. Expected 'DEV' or 'PROD'.")
 
-    # AES-256 Encryption Key (32 bytes)
-    encryption_key_hex = get_env_var("ENCRYPTION_KEY")
-    try:
-        ENCRYPTION_KEY = bytes.fromhex(encryption_key_hex)
-        logger.info("Successfully converted ENCRYPTION_KEY from hex.")
-    except ValueError as e:
-        logger.critical("Failed to convert ENCRYPTION_KEY from hex.")
-        raise ValueError("Invalid ENCRYPTION_KEY value.") from e
-
     # Load environment-specific configurations
     if env == 'PROD':
         logger.info("Running in PRODUCTION environment.")
         URL = get_env_var("PROD_URL")
         BOT_TOKEN = get_env_var("PROD_BOT_TOKEN")
         ACME_GROUP = get_env_var("PROD_ACME_GROUP")
-        ACME_URL = get_env_var("PROD_ACME_URL")
-        ACME_API_KEY = get_env_var("PROD_ACME_KEY")
+        ACME_URL = get_env_var("DEV_ACME_URL")
+        ACME_API_KEY = get_env_var("DEV_ACME_API_KEY")
+        ACME_ENCRYPTION_KEY = bytes.fromhex(os.getenv("p/_ACME_ENCRYPTION_KEY", ""))
+        ACME_AUTH_URL = os.getenv("DEV_ACME_AUTH_URL", "")
+        ACME_WEBHOOK_PEM = os.getenv("PROD_ACME_WEBHOOK_PEM", "")
+        # Fetching secrets from environment variables
+        CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')  # Fetch Cloudflare API token
+        CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')  # Fetch Cloudflare account ID
+
     else:  # DEV environment
         logger.info("Running in DEVELOPMENT environment.")
         URL = get_env_var("DEV_URL")
@@ -62,7 +60,12 @@ try:
         # Optional DEV values – won't raise errors if not present
         ACME_URL = os.getenv("DEV_ACME_URL", "https://acme-qa.fly.dev/operations/dev")
         ACME_API_KEY = os.getenv("DEV_ACME_API_KEY", "")
-    
+        ACME_ENCRYPTION_KEY = bytes.fromhex(os.getenv("DEV_ACME_ENCRYPTION_KEY", ""))
+        ACME_AUTH_URL = os.getenv("DEV_ACME_AUTH_URL", "")
+        ACME_WEBHOOK_PEM = os.getenv("PROD_ACME_WEBHOOK_PEM", "")
+        CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')  # Fetch Cloudflare API token
+        CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')  # Fetch Cloudflare account ID
+
 except ValueError as e:
     logger.critical(f"Startup aborted due to configuration error: {e}")
     sys.exit(1)  # Exit if any critical configuration is missing
@@ -71,8 +74,32 @@ except ValueError as e:
 SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECIPIENT, WAITING_FOR_AUTH = range(4)
 
 # Global variables for valid and authenticated commands
-VALID_COMMANDS = {'trade', 'pay', 'request', 'token', 'share', 'vault', 'start', 'menu'}
+VALID_COMMANDS = {'trade', 'pay', 'request', 'share', 'list','delist', 'vault', 'start', 'menu','logout','cancel'}
 AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault'}
-FEATURED_TOKENS = ["PONKE", "POPCAT", "TOSHI"]  # Define featured tokens as a list of strings
+# Define featured tokens for different intents
+FEATURED_TOKENS_TRADE = ["PONKE", "POPCAT", "TOSHI"]  # Tokens for trading
+FEATURED_TOKENS_PAY = ["USDT", "DAI", "USDC"]  # Tokens for payment
+# List of supported chain IDs
+SUPPORTED_CHAIN_IDS = {
+    '1151111081099710': 'solana',   # Solana
+    '8453': 'base',                 # Base
+    '42161': 'arbitrum-one',        # Arbitrum One
+    '137': 'polygon-pos'            # Polygon (PoS)
+}
+
+LIFI_API_URL = "https://li.quest/v1"
 COINGECKO_API_URL = "https://api.coingecko.com/api/v3/coins/{token_id}"
 logger.info("Configuration successfully loaded and validated.")
+
+payload = {
+    "chainId": "42161",
+    "contractAddress": "0xA3090C10b2dD4B69A594CA4dF7b1F574a8D0B476",
+    "name": "Coyote Early Pass",
+    "description": (
+        "The Coyote Early Pass unlocks exclusive perks for early bird users of Acme. "
+        "Thank you for supporting us! 😊."
+    ),
+    "imageUri": "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/feecc12a-109f-417d-ed17-b5cee8fd1a00/public",
+    "websiteUrl": "https://www.acme.am",
+    "intentLimit": 1
+}
