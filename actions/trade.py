@@ -59,21 +59,22 @@ async def process_trade(update: Update, context: CallbackContext) -> int:
 
         # Prepare the trading card text using the TRADE format
         try:
-            trading_card_text = markdown_v2(TRADE.format(
+            trading_card_text = TRADE.format(
                 username=username,
                 bot_username=BOT_USERNAME,
-                user_id=user_id,
-                symbol=symbol,
                 trading_link=trading_link,
-                price=token_market_data.get('price', 'N/A'),  # Ensure price is included in token_market_data
+                symbol=symbol,
+                price=token_market_data.get('price', 'N/A'),
                 change_24h=token_market_data.get('change_24h', 'N/A'),
                 mcap=token_market_data.get('mcap', 'N/A'),
                 #volume_24h=token_market_data.get('volume_24h', 'N/A'),
-                circulating_supply=token_market_data.get('circulating_supply', 'N/A'),
-                total_supply=token_market_data.get('total_supply', 'N/A')
-            ))
+                #circulating_supply=token_market_data.get('circulating_supply', 'N/A'),
+                #total_supply=token_market_data.get('total_supply', 'N/A')
+            )
         except Exception as e:
             trading_card_text = "Error in formatting trading card text."
+
+        trading_card_text = markdown_v2(trading_card_text)
 
         # Prepare inline button
         buttons = [[

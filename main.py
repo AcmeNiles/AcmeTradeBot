@@ -101,9 +101,8 @@ async def main():
             _message = request.json
             _signature = request.headers.get("acme-signature")
             tx_payload = process_acme_payload(_message, _signature)
-            user_auth_result = tx_payload['auth_result']
+            user_auth_result = tx_payload.auth_result if tx_payload else None
             user_tg_id = user_auth_result['tg_id']
-            context.user_data.pop('amount', None)
             # Fetch the update object (can be a minimal stub for the chat_id)
             bot = application.bot
             update = Update.de_json({"message": {"chat": {"id": user_tg_id}}}, bot)
@@ -115,8 +114,7 @@ async def main():
             if context.user_data.get('state') is WAITING_FOR_AUTH:
                 # Update the user data with auth_result
                 context.user_data['auth_result'] = user_auth_result
-                
-
+                context.user_data.pop('state', None)
                 # Execute the route action with the current update and context
                 await route_action(update, context)
 

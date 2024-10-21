@@ -93,15 +93,22 @@ def process_acme_payload(data, signature):
     logger.debug("Processing Acme payload")
 
     order = data.get('order')  # Safely access 'order' to avoid KeyError
+
+    logger.debug(f"Processing ACME ORDER: {order}")
+
     if not order:
         logger.error("No order found in the payload.")
         return None  # Handle the case where order is missing
 
     encrypted_user_data = order.get('encryptedUserData', '')
+    logger.debug(f"Encrypted data in ACME ORDER: {encrypted_user_data}")
 
     # Decrypt the user data if it exists
     decrypted_user_data = decrypt_data(encrypted_user_data) if encrypted_user_data else {}
+    logger.debug(f"Decrypted data in ACME ORDER: {decrypted_user_data}")
+
     auth_result = decrypt_auth_result(decrypted_user_data)
+    logger.debug(f"AUTH RESULT IN ACME ORDER: {decrypted_user_data}")
 
     update = AcmeWebhookUpdate(
         id=order['id'],  # Required
