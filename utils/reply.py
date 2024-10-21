@@ -36,11 +36,11 @@ async def send_photo(update: Update, context: CallbackContext, photo_url: str, c
         await send_message(update, context, "An error occurred while sending the trading card.")
 
 # Helper function to send an animation (GIF) with caption
-async def send_animation(update: Update, context: CallbackContext, animation_url: str, caption: str, reply_markup):
+async def send_animation(update: Update, context: CallbackContext, photo_url: str, caption: str, reply_markup):
     try:
         if update.message:
             await update.message.reply_animation(
-                animation=animation_url,
+                animation=photo_url,
                 caption=caption,
                 parse_mode="MarkdownV2",
                 reply_markup=reply_markup,

@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo, Bot
 from telegram.ext import ContextTypes, CallbackContext
-from config import WAITING_FOR_AUTH, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,logger
+from config import WAITING_FOR_AUTH, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,BOT_USERNAME, logger
 from messages_photos import markdown_v2
 from utils.reply import send_message, send_photo
 from utils.profilePhoto import fetch_user_profile_photo
@@ -175,6 +175,7 @@ async def create_auth_link(tg_key: str) -> dict:
         ),
         "imageUri": PHOTO_LOGIN,
         "websiteUrl": "https://www.acme.am",
+        "redirectUrl": f"https://t.me/{BOT_USERNAME}"
     }
 
     async with aiohttp.ClientSession() as session:

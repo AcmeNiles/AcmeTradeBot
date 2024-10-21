@@ -2,9 +2,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 from telegram.ext import ConversationHandler, ContextTypes
 from config import logger, ACME_GROUP, ACME_APP_URL
 from utils.membership import get_invite_link
-from utils.reply import send_animation
+from utils.reply import send_animation, send_photo
 from messages_photos import markdown_v2
-PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/9ddff1d7-ce96-499a-d2a8-3e4dae6ee400/public"
+PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/31de49c1-9e2d-4b3b-498a-a8ec7a34fc00/public"
 
 # Define common menu messages with unescaped characters
 MENU = (
@@ -74,10 +74,10 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Send the menu with the minting link and photo
         try:
-            await send_animation(
+            await send_photo(
                 update=update,
                 context=context,
-                animation_url=local_photo_menu,
+                photo_url=local_photo_menu,
                 caption=local_message_menu,
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
