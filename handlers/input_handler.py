@@ -15,7 +15,7 @@ async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Clear intent, token, amount, and receiver at the start
     logger.debug("Clearing user_data: intent, token, amount, receiver")
     context.user_data.pop('intent', None)
-    context.user_data.pop('token', None)
+    context.user_data.pop('tokens', None)
     context.user_data.pop('amount', None)
     context.user_data.pop('receiver', None)
 
@@ -92,7 +92,7 @@ async def get_input_text(update: Update) -> str:
 
 async def update_user_data(context: ContextTypes.DEFAULT_TYPE, new_tokens: list, receiver: str, amount: str, intent: str) -> None:
     """Update user context with new tokens, receiver, amount, and intent."""
-    existing_tokens = set(context.user_data.get("token", []))
+    existing_tokens = set(context.user_data.get("tokens", []))
     combined_tokens = list(existing_tokens | set(new_tokens))  # Union to avoid duplicates
     logger.debug(f"Combined tokens: {combined_tokens}")
 
@@ -102,7 +102,7 @@ async def update_user_data(context: ContextTypes.DEFAULT_TYPE, new_tokens: list,
         logger.debug(f"Intent stored: {intent}")
 
     context.user_data.update({
-        "token": combined_tokens,
+        "tokens": combined_tokens,
         "receiver": receiver or context.user_data.get("receiver"),
         "amount": amount or context.user_data.get("amount"),
     })

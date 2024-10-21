@@ -1,11 +1,12 @@
 import aiohttp
+import asyncio
 import base64
 from dataclasses import dataclass
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.exceptions import InvalidSignature
-from handlers.auth_handler import encrypt_data, decrypt_data
+from handlers.auth_handler import decrypt_data, decrypt_auth_result
 from config import URL, ACME_URL, ACME_API_KEY, logger
 
 @dataclass
@@ -21,11 +22,12 @@ class AcmeWebhookUpdate:
     userWalletAddress: str
     intentId: str
     intentMemo: str
-    decryptedUserData: dict[str, any]  # Changed to a dictionary type
+    auth_result: dict[str, any]  # Changed to a dictionary type
+
 
 async def set_acme_webhook():
     # ACME webhook setup URL and headers
-    acme_api = f"{ACME_URL}/user/set-web-hook"
+    acme_api = f"{ACME_URL}/dev/user/set-web-hook"
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -37,24 +39,23 @@ async def set_acme_webhook():
         "webHookUrl": f"{URL}/acme"  # Using f-string for better readability
     }
 
-    logger.debug("Preparing to set ACME webhook.")
-    logger.debug(f"ACME API URL: {acme_api}")
-    logger.debug(f"Headers: {headers}")
-    logger.debug(f"Payload: {data}")
-
     try:
         async with aiohttp.ClientSession() as session:
             # Make the POST request to set the webhook
             logger.debug("Sending request to set webhook...")
-            async with session.post(acme_api, json=data, headers=headers) as response:
-                # Print the response in the logs
-                if response.status == 200:
-                    logger.info(f"ACME webhook set successfully! Status code: {response.status}")
-                    logger.debug(f"Response Text: {await response.text()}")
-                    logger.debug(f"Payload Sent: {data}")
-                else:
-                    logger.warning(f"Failed to set ACME webhook. Status code: {response.status}")
-                    logger.warning(f"Response: {await response.text()}")
+            try:
+                async with asyncio.timeout(10):  # Set a timeout of 10 seconds
+                    async with session.post(acme_api, json=data, headers=headers) as response:
+                        # Print the response in the logs
+                        if response.status == 200:
+                            logger.info(f"ACME webhook set successfully! Status code: {response.status}")
+                            logger.debug(f"Response Text: {await response.text()}")
+                            logger.debug(f"Payload Sent: {data}")
+                        else:
+                            logger.warning(f"Failed to set ACME webhook. Status code: {response.status}")
+                            logger.warning(f"Response: {await response.text()}")
+            except asyncio.TimeoutError:
+                logger.error("Request to set ACME webhook timed out")
 
     except aiohttp.ClientError as e:
         logger.error(f"An error occurred while setting the ACME webhook: {str(e)}", exc_info=True)
@@ -100,22 +101,22 @@ def process_acme_payload(data, signature):
 
     # Decrypt the user data if it exists
     decrypted_user_data = decrypt_data(encrypted_user_data) if encrypted_user_data else {}
-
-    acme_user = order.get('userId')  # Safely access 'userId'
+    auth_result = decrypt_auth_result(decrypted_user_data)
 
     update = AcmeWebhookUpdate(
         id=order['id'],  # Required
         status=order['status'],  # Required
         createdAt=order['createdAt'],  # Required
         blockchainTransactionHash=order.get('blockchainTransactionHash', ''),  # Optional
-        executionMessage=order.get('executionMessage', ''),  # Optional
-        intentId=order['intentId'],  # Required
-        intentMemo=order.get('intentMemo', ''),  # Optional
-        userId=acme_user,  # Required
+        executionMessage= order.get('executionMessage', ''),  # Optional
+        intentId= order['intentId'],  # Required
+        intentMemo= order.get('intentMemo', ''),  # Optional
+        userId= order.get('userId'),  # Required
         userEmail=order.get('userEmail', ''),  # Optional
         userWalletAddress=order.get('userWalletAddress', ''),  # Optional
-        decryptedUserData=decrypted_user_data,  # Pass decrypted user data as an object
+        auth_result=auth_result,  # Pass auth result
     )
 
     logger.debug(f"Processed Acme payload: {update}")
     return update
+

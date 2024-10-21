@@ -4,30 +4,6 @@ from config import logger
 # Markdown V2 special characters
 MARKDOWN_V2_SPECIAL_CHARS = ['~', '>', '#', '+', '-', '=', '|', '.', '!']
 
-# Define common menu messages with unescaped characters
-MENU = (
-    "\n *👋 Welcome to Acme!* \n\n"
-    "🤑 *Start Your Exchange*\n"
-    "Share trading cards. Get paid instantly.\n\n"
-    "💳 *Tap.* *Trade.* *Done*.\n"
-    "Easily buy any token with your bank card.\n\n"
-    "🔒 *Own your Tokens*\n"
-    "Tokens are secured in a safe. Only you have the keys.\n\n"
-)
-LOGIN = "Let's start making some money! 💸 \n"
-LOGGED_IN = "Let's start making some money! 💸 \n"
-# Trading card text template without Markdown V2 formatting
-
-TRADE = (
-    "📢 Trade *{symbol}*\n\n"
-    "🪙 Price: *{price}*\n"
-    "📈 24h Change: *``{change_24h}*\n\n"
-    "💰 Market Cap: *${mcap}*\n"
-    "📊 24h Volume: *${volume_24h}*\n\n"
-    #"🔄 Circulating Supply: *{circulating_supply}*\n"
-    #"📦 Total Supply: *{total_supply}*\n"
-)
-
 EXCHANGE = (
     "📢 Trade *{symbol}*\n\n"
     "🪙 Price: *{price}*\n"
@@ -38,16 +14,12 @@ EXCHANGE = (
     #"📦 Total Supply: *{total_supply}*\n"
 )
 
-
-# Define the message outside the function
-NOT_LISTED = "🚫 *{tokens_text}* {verb} not listed. Message us to request listing:"
-ASK_TOKEN = "*TYPE* or select the token symbol you want to trade:"
-
 # Photo URLs
-PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/c8896fab-49d6-48ec-f5c6-e46510dd0a00/public"
+#PHOTO_MENU = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/c8896fab-49d6-48ec-f5c6-e46510dd0a00/public"
 PHOTO_TRADE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/432c3594-2f7f-4672-a276-cd11c0dfe900/public"
+PHOTO_EXCHANGE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/d8f8035d-5dee-4a70-d53c-f8e654536a00/public"
+PHOTO_TOP3 = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/d8f8035d-5dee-4a70-d53c-f8e654536a00/public"
 
-PHOTO_URLS_TO_CHECK = [PHOTO_MENU, PHOTO_TRADE]
 
 def markdown_v2(message: str) -> str:
     """Escape special characters for Markdown V2 and ensure the first character is escaped if necessary."""
@@ -78,13 +50,5 @@ def verify_photos():
         except Exception as e:
             logger.error(f"Error checking photo URL {url}: {e}")
 
-# Call the function to get the processed messages
-MESSAGE_MENU = markdown_v2(MENU)
-MESSAGE_LOGIN = markdown_v2(LOGIN)
-MESSAGE_LOGGED_IN = markdown_v2(LOGGED_IN)
-MESSAGE_TRADE = markdown_v2(TRADE)
-MESSAGE_NOT_LISTED = markdown_v2(NOT_LISTED)
-MESSAGE_ASK_TOKEN = markdown_v2(ASK_TOKEN)
 
-# Process the photos
-verify_photos()
+

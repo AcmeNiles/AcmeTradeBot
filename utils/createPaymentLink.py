@@ -10,7 +10,7 @@ def create_pay_link(tg_key: str, chain_id: str, token_address: str, amount: floa
         chain_id (str): The blockchain ID for the token.
         token_address (str): The contract address of the token.
         amount (float): The amount to be paid.
-        to (str): The recipient address for the payment.
+        to (str): The receiver address for the payment.
         redirect_url (str): The URL to redirect after the payment.
 
     Returns:
@@ -31,7 +31,7 @@ def create_pay_link(tg_key: str, chain_id: str, token_address: str, amount: floa
     payload = {
         "chainId": chain_id,
         "contractAddress": token_address,
-        "to": to,  # Use the provided recipient address
+        "to": to,  # Use the provided receiver address
         "amount": str(amount),  # Convert amount to string
         "intentLimit": 1,
         "redirectUrl": redirect_url

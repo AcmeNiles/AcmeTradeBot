@@ -25,12 +25,12 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         context.user_data['amount'] = amount
         logger.info(f"Amount received: {amount}")
 
-        # Check if recipient is already provided
-        if 'recipient' in context.user_data:
+        # Check if receiver is already provided
+        if 'receiver' in context.user_data:
             return await execute_action(update, context)  # Proceed to execute action
         else:
-            await update.message.reply_text("Please provide the recipient address:")
-            return SELECT_RECIPIENT  # Prompt for recipient
+            await update.message.reply_text("Please provide the receiver address:")
+            return SELECT_RECIPIENT  # Prompt for receiver
     else:
         logger.debug("Invalid amount entered.")
         await update.message.reply_text("Please enter a valid amount:")

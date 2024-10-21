@@ -1,4 +1,3 @@
-import logging
 import json
 from http import HTTPStatus
 import asyncio
@@ -6,7 +5,6 @@ import uvicorn
 from asgiref.wsgi import WsgiToAsgi
 from flask import Flask, Response, make_response, request
 from config import *
-from messages_photos import MESSAGE_MENU
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -21,7 +19,7 @@ from handlers.action_handler import execute_action, route_action
 from handlers.input_handler import input_to_action
 from handlers.token_handler import handle_token
 from handlers.amount_handler import handle_amount
-from handlers.receiver_handler import handle_recipient
+from handlers.receiver_handler import handle_receiver
 from utils.webhook import set_acme_webhook, validate_signature, process_acme_payload
 
 # Main function to set up the bot
@@ -43,7 +41,7 @@ async def main():
             states={
                 SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
                 SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
-                SELECT_RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
+                SELECT_RECEIVER: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
                 WAITING_FOR_AUTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, execute_action)]
             },
             fallbacks=[
@@ -58,8 +56,12 @@ async def main():
         logger.info("Conversation handler added to application.")
 
         # Pass webhook settings to telegram and acme
-        logger.info(f"Setting up Telegram webhook with URL: {URL}/telegram")
-        await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
+        try:
+            logger.info(f"Setting webhook for URL: {URL}/telegram with all update types.")
+            await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
+            logger.info("Telegram Webhook successfully set.")
+        except Exception as e:
+            logger.error(f"Failed to set webhook. Error: {e}")
 
         logger.debug("Setting ACME webhook.")
         await set_acme_webhook()
@@ -98,18 +100,26 @@ async def main():
         try:
             _message = request.json
             _signature = request.headers.get("acme-signature")
+            tx_payload = process_acme_payload(_message, _signature)
+            user_auth_result = tx_payload['auth_result']
+            user_tg_id = user_auth_result['tg_id']
+            context.user_data.pop('amount', None)
+            # Fetch the update object (can be a minimal stub for the chat_id)
+            bot = application.bot
+            update = Update.de_json({"message": {"chat": {"id": user_tg_id}}}, bot)
 
-            #logger.debug(f"Acme message received: {_message}, signature: {_signature}")
+            # Fetch the context for this chat
+            context = await application.chat_data.get_chat_data(user_tg_id)
 
-            public_key_pem = ACME_WEBHOOK_PEM
-            message = json.dumps(_message)
+            # Check if the state is WAITING_FOR_AUTH
+            if context.user_data.get('state') is WAITING_FOR_AUTH:
+                # Update the user data with auth_result
+                context.user_data['auth_result'] = user_auth_result
+                
 
-            #if not validate_signature(public_key_pem, message, _signature):
-            #    logger.error("Invalid signature detected")
-            #   return Response(status=HTTPStatus.UNAUTHORIZED)
+                # Execute the route action with the current update and context
+                await route_action(update, context)
 
-            update = process_acme_payload(_message, _signature)
-            await application.update_queue.put(update)            
             logger.info(f"Acme update processed successfully: {update}")
             return Response(status=HTTPStatus.OK)
             

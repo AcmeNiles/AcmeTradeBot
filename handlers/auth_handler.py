@@ -1,117 +1,120 @@
 import os
 import json
-import requests
+import aiohttp
+import asyncio
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo, Bot
 from telegram.ext import ContextTypes, CallbackContext
-from config import WAITING_FOR_AUTH, ACME_AUTH_URL, ACME_API_KEY, BOT_TOKEN, ACME_ENCRYPTION_KEY,logger
-from messages_photos import MESSAGE_LOGIN, PHOTO_MENU
+from config import WAITING_FOR_AUTH, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,logger
+from messages_photos import markdown_v2
+from utils.reply import send_message, send_photo
+from utils.profilePhoto import fetch_user_profile_photo
+from utils.getAcmeProfile import get_user_listed_tokens
 
+PHOTO_LOGIN = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/455f9727-a972-495d-162e-150f67c3e500/public"
+
+LOGIN =  "You need an Early Coyote Pass to start your exchange.\n\nClaim yours now in #OneTap to proceed."
 async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_result=None):
     """
     If the user is not authenticated, show the minting link and extra message.
     """
     # Log the inputs for debugging
-    logger.debug("Received login_card call with the following inputs:")
-    logger.debug(f"Update: {update}")
-    logger.debug(f"Context: {context}")
-    logger.debug(f"Auth Result: {auth_result}")
+    logger.debug(f"Received login_card call with the Auth Result: {auth_result}")
 
-    # Get minting link and menu message
+    # Get minting link
     minting_link = auth_result.get('url', "https://bit.ly/iamcoyote")  
-    menu_message = MESSAGE_LOGIN
 
+    # Prepare the message and photo outside the function
+    intent = context.user_data.get('intent', 'perform this action')
+    tokens = context.user_data.get('tokens', [])
+    # Extract token names from the dictionaries and join them
+    tokens_text = ', '.join(token.get('name', '').upper() for token in tokens if isinstance(token, dict))  
+    menu_message = LOGIN.format(intent=intent, tokens=tokens_text)
     # Log the minting link and menu message
     logger.debug(f"Minting Link: {minting_link}")
     logger.debug(f"Menu Message: {menu_message}")
-    logger.debug(f"PHOTO_MENU: {PHOTO_MENU}")
 
+    photo_url = PHOTO_LOGIN
     buttons = [
-        [InlineKeyboardButton("Claim Your Access Pass", web_app=WebAppInfo(url=minting_link))],
-        [InlineKeyboardButton("Say Hi! 👋 ", url="https://t.me/acmeonetap")]
+        [InlineKeyboardButton("👑 Claim Early Pass", web_app=WebAppInfo(url=minting_link))],
+        [InlineKeyboardButton("👋 Say Hi!  ", url="https://t.me/acmeonetap")]
     ]
 
     reply_markup = InlineKeyboardMarkup(buttons)
 
     try:
-        # Attempt to send the reply photo if update.message is valid
-        if update.message:  # Ensure update.message is not None
-            await update.message.reply_photo(
-                photo=PHOTO_MENU,
-                caption=markdown_v2(menu_message),  # Use markdown_v2 here
-                reply_markup=reply_markup
-            )
-        else:
-            # Attempt to use callback_query if update.message is None
-            await update.callback_query.message.reply_photo(
-                photo=PHOTO_MENU,
-                caption=markdown_v2(menu_message),  # Use markdown_v2 here
-                reply_markup=reply_markup
-            )
+        # Send the photo using send_photo function
+        await send_photo(update, context, photo_url, markdown_v2(menu_message), reply_markup)
     except AttributeError as e:
-        # Log the error if reply_photo fails
+        # Log the error if sending the photo fails
         logger.error(f"Failed to send reply photo: {e}")
+    context.user_data.get('tokens', [])
 
     return WAITING_FOR_AUTH
-    
-async def is_authenticated(update: Update, context: CallbackContext) -> dict:
+
+
+async def is_authenticated(update: Update, context: ContextTypes.DEFAULT_TYPE) -> dict:
     """
     Check if the user is authenticated based on data from create_auth_link.
+    Returns user_acme_id, user_api_key, and user_tg_id in the auth_result.
     """
 
-    # Check if auth_result and tg_key are already cached
+    # Check if auth_result is already cached
     auth_result = context.user_data.get('auth_result')
-    tg_key = context.user_data.get('tg_key')
 
-    if auth_result and tg_key:
-        logger.info("Using cached tg_key and authentication result.")
+    if auth_result:
+        logger.info("Using cached authentication result. All good!")
         return auth_result  # Return cached auth result if available
 
     try:
-        # Generate a new Telegram key if not already cached
+        # Generate a new Telegram key
+        logger.info("Creating a new tg_key...")
+        tg_key = await create_tg_key(update, context)
         if not tg_key:
-            tg_key = await create_tg_key(update)
-            if not tg_key:
-                raise ValueError("Failed to generate a valid Telegram key.")
-            context.user_data['tg_key'] = tg_key  # Cache tg_key
-            logger.info(f"Generated and cached new tg_key: {tg_key}")
+            raise ValueError("Failed to generate a valid Telegram key.")
 
         # Call Acme's create_auth_link API using the tg_key
+        logger.debug("Calling Acme API for auth link...")
         auth_data = await create_auth_link(tg_key)
 
         if 'data' not in auth_data:
             raise ValueError("Acme server issue. Please try again later.")
 
         data = auth_data['data']
-
+        
         # Handle authenticated and non-authenticated scenarios
-        if 'telegramAccount' in data:
-            user_id = data.get('userid')
-            if not user_id:
-                raise ValueError("Missing user ID despite valid telegramAccount.")
-            auth_result = {"id": user_id}  # Store user ID if authenticated
+        if 'encryptedUserData' in data:
+            logger.info("User is authenticated, decrypting data now...")
+            decrypted_data = decrypt_data(data['encryptedUserData'])
+
+            # Store the user details in auth_result
+            auth_result =  decrypt_auth_result(decrypted_data)
+            #logger.info(f"User authenticated successfully: {auth_result}")
+
+            # Cache the auth_result to avoid redundant calls
+            context.user_data['auth_result'] = auth_result
+            return auth_result
+
         elif isinstance(data, str) and data.startswith("http"):
-            auth_result = {"url": data}  # Store login URL if authentication needed
+            logger.info("User needs to log in. Redirecting them to login URL.")
+            auth_result = {"url": data}
+            context.user_data['auth_result'] = auth_result
+            return auth_result
+
         else:
-            raise ValueError("Unexpected authentication response: no URL or user ID found.")
-
-        # Cache the auth_result to avoid redundant calls
-        context.user_data['auth_result'] = auth_result
-        logger.info(f"Cached authentication result: {auth_result}")
-
-        return auth_result
+            raise ValueError("Unexpected response. No URL or user data found 😕")
 
     except Exception as e:
-        logger.exception(f"Authentication failed: {str(e)}")
+        logger.exception("Authentication failed. Something broke 😓")
         raise ValueError(f"An error occurred during authentication: {str(e)}")
 
-async def create_tg_key(update: Update) -> str:
+async def create_tg_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """
     Extract and encrypt Telegram user data.
     """
     try:
-        tg_user_data = await get_tg_user(update)
+        tg_user_data = await get_tg_user(update, context)
         encrypted_data = encrypt_data(tg_user_data)
         logger.info("Telegram user data encrypted successfully.")
 
@@ -121,20 +124,7 @@ async def create_tg_key(update: Update) -> str:
         logger.error(f"Failed to create Telegram key: {str(e)}")
         raise
 
-async def get_profile_photo_url(bot: Bot, user_id: int) -> str:
-    """
-    Get the profile photo URL of the Telegram user.
-    """
-    # Fetch user profile photos using the bot instance
-    photos = await bot.get_user_profile_photos(user_id)
-
-    if photos.total_count > 0:
-        file_id = photos.photos[0][0].file_id  # Get the first photo's file ID
-        file = await bot.get_file(file_id)  # Retrieve the file object
-        return file.file_path  # Return the file path of the photo
-    return None  # Return None if no photos are found
-
-async def get_tg_user(update: Update) -> dict:
+async def get_tg_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> dict:
     """
     Extract Telegram user data from the update object.
     """
@@ -160,27 +150,22 @@ async def get_tg_user(update: Update) -> dict:
         "languageCode": user.language_code,
         "isBot": user.is_bot,
         "chatId": chat_id,
-        #"profilePhotoUrl": profile_photo_url
+        "profilePhotoUrl": await fetch_user_profile_photo(update, context)
     }
-
 
 async def create_auth_link(tg_key: str) -> dict:
     """
-    Call the authentication API to create a claim intent.
+    Call the authentication API to create a claim intent asynchronously.
     """
-    url = f"{ACME_AUTH_URL}/intent/create-claim-loyalty-card-intent"
-    #url = 'https://acme-prod.fly.dev/operations/dev/intent/create-claim-loyalty-card-intent'
+    url = f"{ACME_URL}/telegram/intent/create-claim-loyalty-card-intent"
 
     headers = {
         'X-API-KEY': ACME_API_KEY,
-        #'X-API-KEY' : 'PRCAEUY-LA6UTNQ-XYL5DEI-ZNUEMDA',
         'X-Secure-TG-User-Info': tg_key,
         'Content-Type': 'application/json'
     }
 
     payload = {
-        #"chainId": "42161",
-        #"contractAddress": "0xA3090C10b2dD4B69A594CA4dF7b1F574a8D0B476",
         "chainId": "11155111",
         "contractAddress": "0x3c9DAbD254A3fF45fC0EF46be097E2c7Bedd8a4b",
         "name": "Coyote Early Pass",
@@ -188,19 +173,22 @@ async def create_auth_link(tg_key: str) -> dict:
             "The Coyote Early Pass unlocks exclusive perks for early bird users of Acme. "
             "Thank you for supporting us! 😊."
         ),
-        "imageUri": PHOTO_MENU,
+        "imageUri": PHOTO_LOGIN,
         "websiteUrl": "https://www.acme.am",
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        logger.debug(f"Auth Response: {response.json()}")
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, headers=headers, json=payload, timeout=5) as response:
+                response.raise_for_status()  # Raise an error for HTTP error responses
+                return await response.json()  # Return the response as JSON
+        except asyncio.TimeoutError:
+            logger.error("Request to authentication API timed out")
+            raise
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to call authentication API: {e}")
+            raise
 
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to call authentication API: {e}")
-        raise
 
 async def get_invite_link(update: Update, context: ContextTypes.DEFAULT_TYPE, group_id: str) -> str:
     """
@@ -300,8 +288,42 @@ def decrypt_data(encrypted_data: str) -> dict:
 
         # Parse the JSON string into a dictionary
         data = json.loads(json_data)
-        logger.debug(f"Decrypted user data: {data}")
+        #logger.debug(f"Decrypted user data: {data}")
         return data
     except Exception as e:
         logger.error(f"Failed to decrypt data: {e}")
         return {}
+
+def decrypt_auth_result(decrypted_data: dict) -> dict:
+    """
+    Convert decrypted data into an authentication result.
+
+    Returns a dictionary containing user details.
+    Raises ValueError if essential user data is missing.
+    """
+    user_acme_id = decrypted_data.get('userId')
+    user_api_key = decrypted_data.get('userApiKey')
+    user_tg_id = decrypted_data.get('telegramAccount', {}).get('id')
+    user_tg_userName = decrypted_data.get('telegramAccount', {}).get('userName')
+    user_tg_firstName = decrypted_data.get('telegramAccount', {}).get('firstName')
+    user_tg_lastName = decrypted_data.get('telegramAccount', {}).get('lastName')
+    user_tg_photo = decrypted_data.get('telegramAccount', {}).get('profilePhotoUrl')
+    user_tg_language_code = decrypted_data.get('telegramAccount', {}).get('languageCode')
+    user_tg_chat_id = decrypted_data.get('telegramAccount', {}).get('chatId')
+
+    if not (user_acme_id and user_api_key and user_tg_id):
+        raise ValueError("Missing user data despite valid telegramAccount. Something’s off 🤔")
+
+    # Store the user details in auth_result
+    return {
+        "acme_id": user_acme_id,
+        "api_key": user_api_key,
+        "tg_id": user_tg_id,
+        "tg_photo": user_tg_photo,
+        "tg_userName": user_tg_userName,
+        "tg_firstName": user_tg_firstName,
+        "tg_lastName": user_tg_lastName,
+        "tg_languageCode": user_tg_language_code,
+        "tg_chatId": user_tg_chat_id,
+
+    }

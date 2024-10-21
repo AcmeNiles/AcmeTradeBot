@@ -1,7 +1,8 @@
 import requests
 from config import ACME_API_KEY, ACME_URL, logger
+from telegram.ext import ContextTypes
 
-async def create_trading_link(tg_key: str, chain_id: str, token_address: str, redirect_url: str) -> str:
+async def create_trading_link(context: ContextTypes.DEFAULT_TYPE, chain_id: str, token_address: str, redirect_url: str) -> str:
     """
     Create a trading link using the provided parameters and Telegram key.
 
@@ -19,20 +20,19 @@ async def create_trading_link(tg_key: str, chain_id: str, token_address: str, re
     """
     
     # Construct the request URL
-    #url = f"{ACME_URL}/intent/create-buy-purchase-link-intent"
-    url = "https://acme-prod.fly.dev/operations/dev/intent/create-buy-purchase-link-intent"
-    ACME_API_KEY = "PRCAEUY-LA6UTNQ-XYL5DEI-ZNUEMDA"
+    url = f"{ACME_URL}/dev/intent/create-buy-purchase-link-intent"
+    #url = "https://acme-prod.fly.dev/operations/dev/intent/create-buy-purchase-link-intent"
+    #ACME_API_KEY = "PRCAEUY-LA6UTNQ-XYL5DEI-ZNUEMDA"
     # Prepare the headers with API key and tg_key
+    acme_api_key = context.user_data.get("auth_result", {}).get("api_key", ACME_API_KEY)
+
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "X-API-KEY": ACME_API_KEY,
-        'X-Secure-TG-User-Info': tg_key  # Include tg_key in headers
+        "X-API-KEY": acme_api_key,
     }
 
     chain_id = str(chain_id)
-    logger.debug("CHAIN ID IS %s", chain_id)
-    logger.debug(chain_id == "1151111081099710")
     # Modify the chain ID if it matches the specific value (string comparison)
     if chain_id == "1151111081099710":
         chain_id = 'solana'

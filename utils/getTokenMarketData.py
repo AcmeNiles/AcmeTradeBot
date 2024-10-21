@@ -70,11 +70,11 @@ def format_financial_metrics(value: float, metric_type: str) -> str:
         return "N/A"
 
     if metric_type == "price":
-        if value < 0.001:  # Start using scientific notation for values less than 0.001
+        if value < 0.01:  # Start using scientific notation for values less than 0.001
             formatted = f"${value:.2e}"  # Format in scientific notation
             base, exp = formatted.split('e')
             return f"{base}e{int(exp)}"  # Compress the exponent
-        return f"${value:.4f}".rstrip('0').rstrip('.')  # Standard decimal format for values >= 0.001
+        return f"${value:.3f}".rstrip('0').rstrip('.')  # Standard decimal format for values >= 0.001
 
     if metric_type in {"mcap", "volume", "circulating_supply", "total_supply"}:
         suffixes = ["", "K", "M", "B", "T"]
@@ -82,11 +82,11 @@ def format_financial_metrics(value: float, metric_type: str) -> str:
         while value >= 1000 and idx < len(suffixes) - 1:
             value /= 1000
             idx += 1
-        return f"{value:.2f}{suffixes[idx]}"  # Add appropriate suffix
+        return f"{value:.2f} {suffixes[idx]}"  # Add appropriate suffix
 
     if metric_type == "change_24h":
         sign = "+" if value > 0 else ""
         emoji = "🟢" if value > 0 else "🔴"
-        return f" {sign}{value:.2f}% {emoji}"
+        return f" {sign}{value:.2f}%"
 
     return "N/A"
