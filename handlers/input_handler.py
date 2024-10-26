@@ -12,13 +12,6 @@ async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     logger.debug("Starting input_to_action...")
 
-    # Clear intent, token, amount, and receiver at the start
-    logger.debug("Clearing user_data: intent, token, amount, receiver")
-    context.user_data.pop('intent', None)
-    context.user_data.pop('tokens', None)
-    context.user_data.pop('amount', None)
-    context.user_data.pop('receiver', None)
-
     # Get the chat type (private, group, supergroup)
     chat_type = update.message.chat.type if update.message else None
     logger.debug(f"Chat type: {chat_type}")
@@ -89,24 +82,45 @@ async def get_input_text(update: Update) -> str:
     logger.debug("No valid message found in the update; returning an empty string.")
     return ''
 
-
 async def update_user_data(context: ContextTypes.DEFAULT_TYPE, new_tokens: list, receiver: str, amount: str, intent: str) -> None:
-    """Update user context with new tokens, receiver, amount, and intent."""
-    existing_tokens = set(context.user_data.get("tokens", []))
-    combined_tokens = list(existing_tokens | set(new_tokens))  # Union to avoid duplicates
-    logger.debug(f"Combined tokens: {combined_tokens}")
+    """Safely update user context with new tokens, receiver, amount, and intent."""
+    
+    # Initialize specific keys if they don’t exist
+    context.user_data.setdefault("tokens", [])
+    context.user_data.setdefault("receiver", None)
+    context.user_data.setdefault("amount", None)
+    context.user_data.setdefault("intent", None)
+    
+    # Ensure new_tokens is a list to avoid NoneType errors
+    if not isinstance(new_tokens, list):
+        logger.warning("Expected new_tokens to be a list, defaulting to an empty list.")
+        new_tokens = []
 
-    # Only set the intent if it doesn't already exist in context
-    if "intent" not in context.user_data:
+    # Deduplicate tokens based on 'symbol' key, if available
+    existing_tokens = {token['symbol']: token for token in context.user_data["tokens"]
+                       if isinstance(token, dict) and 'symbol' in token}
+
+    # Update or add new tokens
+    for token in new_tokens:
+        if isinstance(token, dict) and 'symbol' in token:
+            existing_tokens[token['symbol']] = token  # Update existing or add new token by symbol
+        else:
+            existing_tokens[token] = token  # Non-dict tokens stored directly by value
+
+    # Update context with deduplicated tokens
+    context.user_data["tokens"] = list(existing_tokens.values())
+
+    # Update other fields only if values are provided
+    if intent:
         context.user_data["intent"] = intent
-        logger.debug(f"Intent stored: {intent}")
+    if receiver:
+        context.user_data["receiver"] = receiver
+    if amount:
+        context.user_data["amount"] = amount
 
-    context.user_data.update({
-        "tokens": combined_tokens,
-        "receiver": receiver or context.user_data.get("receiver"),
-        "amount": amount or context.user_data.get("amount"),
-    })
+    # Log final updated context for debugging
     logger.debug(f"Updated context.user_data: {context.user_data}")
+
 
 def is_valid_float(value: str) -> bool:
     """Check if the provided value is a valid float or integer."""

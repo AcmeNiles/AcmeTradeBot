@@ -2,19 +2,24 @@ import os
 import json
 import aiohttp
 import asyncio
+from datetime import datetime, timedelta
+
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo, Bot
-from telegram.ext import ContextTypes, CallbackContext
-from config import WAITING_FOR_AUTH, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,BOT_USERNAME, logger
+from telegram.ext import ContextTypes, ConversationHandler
+from config import logger, URL, AUTH_EXPIRATION, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,BOT_USERNAME, WHY_LIST, DEFAULT_TIMEOUT, RETRY_COUNT, PHOTO_COYOTE_CHEST
+
+from telegram.helpers import escape_markdown
 from messages_photos import markdown_v2
-from utils.reply import send_message, send_photo
+from utils.reply import send_message, send_photo, send_error_message
 from utils.profilePhoto import fetch_user_profile_photo
 from utils.getAcmeProfile import get_user_listed_tokens
 
-PHOTO_LOGIN = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/455f9727-a972-495d-162e-150f67c3e500/public"
+LOGIN = WHY_LIST + """
+\n*👑 Claim Early Pass to get started!* 
+"""
 
-LOGIN =  "You need an Early Coyote Pass to start your exchange.\n\nClaim yours now in #OneTap to proceed."
 async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_result=None):
     """
     If the user is not authenticated, show the minting link and extra message.
@@ -23,19 +28,21 @@ async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_re
     logger.debug(f"Received login_card call with the Auth Result: {auth_result}")
 
     # Get minting link
-    minting_link = auth_result.get('url', "https://bit.ly/iamcoyote")  
+    minting_link = auth_result.get('url', None)  # Changed to None for checking
+
+    if not minting_link:
+        # If minting link is not created, send error message and end the conversation
+        await send_error_message(update, context)
+        return ConversationHandler.END  # End the conversation
 
     # Prepare the message and photo outside the function
-    intent = context.user_data.get('intent', 'perform this action')
+    intent = context.user_data.get('intent', None)
     tokens = context.user_data.get('tokens', [])
     # Extract token names from the dictionaries and join them
     tokens_text = ', '.join(token.get('name', '').upper() for token in tokens if isinstance(token, dict))  
     menu_message = LOGIN.format(intent=intent, tokens=tokens_text)
-    # Log the minting link and menu message
-    logger.debug(f"Minting Link: {minting_link}")
-    logger.debug(f"Menu Message: {menu_message}")
 
-    photo_url = PHOTO_LOGIN
+    photo_url = PHOTO_COYOTE_CHEST
     buttons = [
         [InlineKeyboardButton("👑 Claim Early Pass", web_app=WebAppInfo(url=minting_link))],
         [InlineKeyboardButton("👋 Say Hi!  ", url="https://t.me/acmeonetap")]
@@ -45,68 +52,71 @@ async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_re
 
     try:
         # Send the photo using send_photo function
-        await send_photo(update, context, photo_url, markdown_v2(menu_message), reply_markup)
+        await send_photo(
+            update, 
+            context, 
+            photo_url, 
+            markdown_v2(menu_message),
+            reply_markup
+        )
     except AttributeError as e:
         # Log the error if sending the photo fails
         logger.error(f"Failed to send reply photo: {e}")
-    context.user_data.get('tokens', [])
 
-    return WAITING_FOR_AUTH
-
-
+    return ConversationHandler.END
+    
 async def is_authenticated(update: Update, context: ContextTypes.DEFAULT_TYPE) -> dict:
     """
     Check if the user is authenticated based on data from create_auth_link.
     Returns user_acme_id, user_api_key, and user_tg_id in the auth_result.
     """
 
-    # Check if auth_result is already cached
-    auth_result = context.user_data.get('auth_result')
+    user_tg_id = str(update.effective_chat.id)  # Use the user's Telegram ID as key
 
+    # 1. Check if auth_result is cached and valid
+    auth_result = await get_auth_result(update, context)
     if auth_result:
-        logger.info("Using cached authentication result. All good!")
-        return auth_result  # Return cached auth result if available
+        logger.info("Using cached authentication result from bot_data. All good!")
+        return auth_result
 
     try:
-        # Generate a new Telegram key
+        # 2. Create a new tg_key if no valid cached result is found
         logger.info("Creating a new tg_key...")
         tg_key = await create_tg_key(update, context)
         if not tg_key:
             raise ValueError("Failed to generate a valid Telegram key.")
 
-        # Call Acme's create_auth_link API using the tg_key
+        # 3. Call Acme's create_auth_link API using the tg_key
         logger.debug("Calling Acme API for auth link...")
-        auth_data = await create_auth_link(tg_key)
+        auth_data = await create_auth_link(context, tg_key)
 
         if 'data' not in auth_data:
             raise ValueError("Acme server issue. Please try again later.")
 
         data = auth_data['data']
-        
-        # Handle authenticated and non-authenticated scenarios
+
+        # 4. Handle authenticated and non-authenticated scenarios
         if 'encryptedUserData' in data:
             logger.info("User is authenticated, decrypting data now...")
             decrypted_data = decrypt_data(data['encryptedUserData'])
+            auth_result = decrypt_auth_result(decrypted_data)
 
-            # Store the user details in auth_result
-            auth_result =  decrypt_auth_result(decrypted_data)
-            #logger.info(f"User authenticated successfully: {auth_result}")
-
-            # Cache the auth_result to avoid redundant calls
-            context.user_data['auth_result'] = auth_result
+            # Store the auth result with expiration
+            if await store_auth_result(context.application, user_tg_id, auth_result):
+                logger.info(f"User authenticated successfully: {auth_result}")
             return auth_result
 
         elif isinstance(data, str) and data.startswith("http"):
             logger.info("User needs to log in. Redirecting them to login URL.")
             auth_result = {"url": data}
-            context.user_data['auth_result'] = auth_result
+            await store_auth_result(context.application, user_tg_id, auth_result)
             return auth_result
 
         else:
             raise ValueError("Unexpected response. No URL or user data found 😕")
 
     except Exception as e:
-        logger.exception("Authentication failed. Something broke 😓")
+        logger.error("Authentication failed. Something broke 😓")
         raise ValueError(f"An error occurred during authentication: {str(e)}")
 
 async def create_tg_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
@@ -150,13 +160,19 @@ async def get_tg_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> dic
         "languageCode": user.language_code,
         "isBot": user.is_bot,
         "chatId": chat_id,
-        "profilePhotoUrl": await fetch_user_profile_photo(update, context)
+        "webHookUrl": f"{URL}/acme",
+        "referrerTgId": context.user_data.get('referrer_tg_id', None),
+        "profileImageUrl": await fetch_user_profile_photo(update, context)
     }
 
-async def create_auth_link(tg_key: str) -> dict:
+
+async def create_auth_link(context, tg_key: str) -> dict:
     """
     Call the authentication API to create a claim intent asynchronously.
+    Retries the request if it fails due to a timeout or network error.
+    Returns None if all attempts fail and sends a message to the user.
     """
+
     url = f"{ACME_URL}/telegram/intent/create-claim-loyalty-card-intent"
 
     headers = {
@@ -173,23 +189,38 @@ async def create_auth_link(tg_key: str) -> dict:
             "The Coyote Early Pass unlocks exclusive perks for early bird users of Acme. "
             "Thank you for supporting us! 😊."
         ),
-        "imageUri": PHOTO_LOGIN,
+        "imageUri": PHOTO_COYOTE_CHEST,
         "websiteUrl": "https://www.acme.am",
-        "redirectUrl": f"https://t.me/{BOT_USERNAME}"
     }
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url, headers=headers, json=payload, timeout=5) as response:
-                response.raise_for_status()  # Raise an error for HTTP error responses
-                return await response.json()  # Return the response as JSON
-        except asyncio.TimeoutError:
-            logger.error("Request to authentication API timed out")
-            raise
-        except aiohttp.ClientError as e:
-            logger.error(f"Failed to call authentication API: {e}")
-            raise
+    #logger.debug(f"AUTH REQUEST: {url}, {headers}, {payload}")
 
+    # Retry logic with `RETRY_COUNT`
+    for attempt in range(RETRY_COUNT):
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)) as session:
+            try:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    response.raise_for_status()  # Raise an error for HTTP error responses
+                    return await response.json()  # Return the response as JSON
+
+            except asyncio.TimeoutError:
+                logger.error(f"Attempt {attempt + 1}: Request to authentication API timed out.")
+            except aiohttp.ClientError as e:
+                logger.error(f"Attempt {attempt + 1}: Failed to call authentication API: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error on attempt {attempt + 1}: {str(e)}")
+
+    # Log final failure after exhausting retries
+    logger.error("Failed to create auth link after multiple attempts.")
+
+    # Send a message to the user about the failure using the utility function
+    await send_message(
+        context.update,  # Ensure you pass the update from the context
+        context,
+        text= markdown_v2("⚠️ We're facing issues with the service. Please try again later.")
+    )
+
+    return None  # Return None if all attempts fail
 
 async def get_invite_link(update: Update, context: ContextTypes.DEFAULT_TYPE, group_id: str) -> str:
     """
@@ -308,17 +339,22 @@ def decrypt_auth_result(decrypted_data: dict) -> dict:
     user_tg_userName = decrypted_data.get('telegramAccount', {}).get('userName')
     user_tg_firstName = decrypted_data.get('telegramAccount', {}).get('firstName')
     user_tg_lastName = decrypted_data.get('telegramAccount', {}).get('lastName')
-    user_tg_photo = decrypted_data.get('telegramAccount', {}).get('profilePhotoUrl')
+    user_tg_referrerTgId = decrypted_data.get('telegramAccount', {}).get('referrerTgId')
+    user_tg_photo = decrypted_data.get('telegramAccount', {}).get('userProfileImage')
     user_tg_language_code = decrypted_data.get('telegramAccount', {}).get('languageCode')
     user_tg_chat_id = decrypted_data.get('telegramAccount', {}).get('chatId')
+    user_webHookUrl = decrypted_data.get('telegramAccount', {}).get('webHookUrl')
+
 
     if not (user_acme_id and user_api_key and user_tg_id):
-        raise ValueError("Missing user data despite valid telegramAccount. Something’s off 🤔")
+        logger.debug("Missing user data despite valid telegramAccount. Something’s off 🤔")
+        return None
 
     # Store the user details in auth_result
     return {
         "acme_id": user_acme_id,
         "api_key": user_api_key,
+        "webhook_url": user_webHookUrl,
         "tg_id": user_tg_id,
         "tg_photo": user_tg_photo,
         "tg_userName": user_tg_userName,
@@ -326,5 +362,93 @@ def decrypt_auth_result(decrypted_data: dict) -> dict:
         "tg_lastName": user_tg_lastName,
         "tg_languageCode": user_tg_language_code,
         "tg_chatId": user_tg_chat_id,
-
+        "tg_referrerTgId": user_tg_referrerTgId
     }
+
+async def store_auth_result(application, user_tg_username: str, auth_result: dict) -> bool:
+    """Store the auth result with an expiration and return success status."""
+    bot_data = application.bot_data
+
+    if not isinstance(auth_result, dict) or not auth_result:
+        logger.error("Invalid auth_result provided. Must be a non-empty dictionary.")
+        return False
+
+    # Retrieve or create user entry
+    user_data = bot_data.get(user_tg_username, {})
+    current_auth = user_data.get("auth", {})
+
+    # Check if the current auth is expired or has a "url"
+    if "auth" in user_data and user_data["expires_at"] > datetime.now():
+        if "url" in current_auth:
+            logger.debug(f"Current auth has 'url', overwriting with new auth_result for user {user_tg_username}.")
+            user_data["auth"] = auth_result  # Overwrite the entire auth
+        else:
+            logger.debug(f"Auth result: {user_data}\nNot overwriting.")
+            return False
+    else:
+        # Store auth result with expiration
+        user_data["auth"] = auth_result
+        user_data["expires_at"] = datetime.now() + timedelta(minutes=AUTH_EXPIRATION)
+
+    bot_data[user_tg_username] = user_data
+
+    logger.debug(f"Stored auth result for user {user_tg_username}.")
+    return True
+
+
+async def get_auth_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retrieve and validate the stored auth result for the user."""
+    user_tg_userName = update.effective_user.username
+    data = context.bot_data.get(user_tg_userName)
+    logger.debug(f"Retrieved auth result for user {user_tg_userName}: {data and "auth" in data and data["expires_at"] > datetime.now()}")
+    if data and "auth" in data and data["expires_at"] > datetime.now():
+        return data["auth"]
+
+    # Cleanup expired data
+    context.bot_data.pop(user_tg_userName, None)
+    return None
+
+
+async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, top3: list) -> bool:
+    """Store or update the top3 data, adding up to 3 items or replacing if already full."""
+    bot_data = context.bot_data  # Access bot_data through context
+
+    if not top3:
+        logger.error("Top3 data not provided.")
+        return False
+
+    user_tg_username = update.effective_user.username  # Get the username from the update
+
+    # Retrieve or create user entry
+    user_data = bot_data.get(user_tg_username, {})
+    existing_top3 = user_data.get("top3", [])
+
+    # Ensure existing_top3 is a list
+    if not isinstance(existing_top3, list):
+        logger.warning("Converting non-list top3 data to list.")
+        existing_top3 = list(existing_top3)
+
+    # Combine lists and remove duplicates, keeping only the latest occurrence
+    combined_top3 = existing_top3 + top3
+    deduplicated_top3 = [item for i, item in enumerate(combined_top3) if item not in combined_top3[i + 1:]]
+
+    # Keep only the last 3 items
+    user_data["top3"] = deduplicated_top3[-3:]
+
+    # Set expiration time
+    user_data["expires_at"] = datetime.now() + timedelta(minutes=AUTH_EXPIRATION)
+    bot_data[user_tg_username] = user_data  # Store updated user data
+
+    logger.debug(f"Updated top3 for user {user_tg_username}: {user_data['top3']}")
+    return True
+    
+async def get_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE,  username: str = None):
+    """Retrieve and validate the stored top3 data for the user."""
+
+    # Use provided username or fallback to the effective user's username
+    user_tg_userName = username if username else update.effective_user.username
+    data = context.bot_data.get(user_tg_userName)
+
+    if data and "top3" in data and data["expires_at"] > datetime.now():
+        return data["top3"]
+    return None

@@ -64,7 +64,7 @@ async def fetch_user_profile_photo(update: Update, context: ContextTypes.DEFAULT
             file = await context.bot.get_file(profile_photo_file_id)
             photo_url = file.file_path  # This will give you the relative path to the file on Telegram's server
 
-            #logger.debug(f"Profile photo URL for user_id {user_id}: {photo_url}")
+            logger.debug(f"Profile photo URL for user_id {user_id}: {photo_url}")
             # Store the URL in context.user_data for future use
             return photo_url  # Return the Telegram profile photo URL
 

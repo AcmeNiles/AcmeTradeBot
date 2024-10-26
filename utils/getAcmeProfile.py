@@ -6,7 +6,6 @@ from telegram.ext import ContextTypes
 from utils.tokenValidator import validate_tokens
 from config import logger, MAX_LISTED_TOKENS
 
-
 ACME_API_URL_PROFILE = f"{ACME_URL}/checkout/user/get-public-profile"
 ACME_API_URL_TOKENS = f"{ACME_URL}/checkout/intent/get-user-listed-tokens"
 
@@ -73,37 +72,37 @@ async def validate_user_and_tokens(receiver_username: str, update: Update, conte
     logger.info("Receiver and tokens successfully validated for username: %s", receiver_username)
     return acme_user_data, valid_tokens, None
 
-async def process_user_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Validate the user and store their auth_result in context.user_data."""
+async def process_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Validate the user and store their top3 in bot_data."""
+    from handlers.auth_handler import get_auth_result, get_user_top3, store_user_top3
 
-    # Check if auth_result exists and is valid
-    auth_result = context.user_data.get('auth_result')
+    # Retrieve the auth result using the function
+    auth_result = await get_auth_result(update, context)
     if not auth_result or auth_result.get('url') == 'url':
         logger.warning("User is not authenticated: %s", update.effective_user.id)
         return None, None, "User is not authenticated."
 
-    # Check if tokens are already stored
-    tokens = auth_result.get('tokens')
-    if tokens:
-        logger.info("Tokens already exist for user: %s", update.effective_user.id)
+    # Check if top3 tokens are already stored
+    user_tg_username = update.effective_user.username
+    top3_tokens = await get_user_top3(update, context)
+    if top3_tokens:
+        logger.info("Top3 tokens already exist for user: %s", update.effective_user.id)
         return True  # Early return if tokens are present
 
+    # Retrieve the Acme ID and listed tokens for validation
     acme_id = auth_result.get('acme_id')
     listed_tokens = await get_user_listed_tokens(acme_id)
-
     if not listed_tokens:
         logger.warning("No tokens listed for user ID: %s", acme_id)
         return None, None, "No tokens found for the user."
 
-    # Validate and store tokens
+    # Validate the listed tokens and store only the valid ones
     valid_tokens, invalid_tokens = await validate_tokens(listed_tokens[:MAX_LISTED_TOKENS], update, context)
     if invalid_tokens:
         logger.warning("Invalid tokens found: %s", invalid_tokens)
 
-    # Update user data with valid tokens
-    auth_result['tokens'] = valid_tokens
-    context.user_data['auth_result'] = auth_result  # Update the context
+    # Store the valid tokens in top3 for the user
+    await store_user_top3(update, context, valid_tokens)
 
-    logger.info("Auth result with user data and tokens successfully processed for user: %s", update.effective_user.id)
-
+    logger.info("Top3 tokens successfully processed and stored for user: %s", update.effective_user.id)
     return True

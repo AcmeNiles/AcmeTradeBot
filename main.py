@@ -1,31 +1,29 @@
 import json
+import random
+import datetime
 from http import HTTPStatus
 import asyncio
 import uvicorn
 from asgiref.wsgi import WsgiToAsgi
 from flask import Flask, Response, make_response, request
 from config import *
-from telegram import Update
+from telegram import Update, Message, Chat, User, MessageEntity
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
     ConversationHandler,
+    TypeHandler,
     filters
 )
-
-from handlers.action_handler import execute_action, route_action
 from handlers.input_handler import input_to_action
-from handlers.token_handler import handle_token
-from handlers.amount_handler import handle_amount
-from handlers.receiver_handler import handle_receiver
-from utils.webhook import set_acme_webhook, validate_signature, process_acme_payload
+from utils.webhook import set_acme_webhook, process_acme_payload, AcmeWebhookUpdate, AcmeContext, webhook_handler
 
 # Main function to set up the bot
 async def main():
     logger.debug("Starting main setup function.")
-
+    
     try:
         # Replace 'YOUR_TOKEN' with your actual bot token
         application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -34,18 +32,17 @@ async def main():
         # Define the conversation handler
         conv_handler = ConversationHandler(
             entry_points=[
-                CommandHandler(['start', 'menu', 'trade', 'pay', 'request','list', 'share','vault'], input_to_action),
+                CommandHandler(VALID_COMMANDS, input_to_action),
+                MessageHandler(filters.ALL, input_to_action),  # Absolute fallback for any message
                 CallbackQueryHandler(input_to_action),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)  # Catch any text that isn't a command
             ],
             states={
-                SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
-                SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
-                SELECT_RECEIVER: [MessageHandler(filters.TEXT & ~filters.COMMAND, route_action)],
-                WAITING_FOR_AUTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, execute_action)]
+                SELECT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)],
+                SELECT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)],
+                SELECT_RECEIVER: [MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action)],
             },
             fallbacks=[
-                MessageHandler(filters.TEXT & ~filters.COMMAND, input_to_action),  # Catch any text that isn't a command
+                MessageHandler(filters.ALL, input_to_action),  # Absolute fallback for any message
                 CallbackQueryHandler(input_to_action)
             ],
             allow_reentry=True
@@ -53,6 +50,7 @@ async def main():
 
         # Add the conversation handler to the application
         application.add_handler(conv_handler)
+        application.add_handler(TypeHandler(AcmeWebhookUpdate, webhook_handler))
         logger.info("Conversation handler added to application.")
 
         # Pass webhook settings to telegram and acme
@@ -97,37 +95,39 @@ async def main():
     async def acme() -> Response:
         logger.debug("Received an update from Acme.")
 
+        # Step 1: Validate and Process the Payload
         try:
             _message = request.json
             _signature = request.headers.get("acme-signature")
-            tx_payload = process_acme_payload(_message, _signature)
-            user_auth_result = tx_payload.auth_result if tx_payload else None
-            user_tg_id = user_auth_result['tg_id']
-            # Fetch the update object (can be a minimal stub for the chat_id)
-            bot = application.bot
-            update = Update.de_json({"message": {"chat": {"id": user_tg_id}}}, bot)
 
-            # Fetch the context for this chat
-            context = await application.chat_data.get_chat_data(user_tg_id)
+            if not _message or not _signature:
+                raise ValueError("Missing message body or Acme signature header.")
 
-            # Check if the state is WAITING_FOR_AUTH
-            if context.user_data.get('state') is WAITING_FOR_AUTH:
-                # Update the user data with auth_result
-                context.user_data['auth_result'] = user_auth_result
-                context.user_data.pop('state', None)
-                # Execute the route action with the current update and context
-                await route_action(update, context)
+            update = await process_acme_payload(_message, _signature, application)
 
-            logger.info(f"Acme update processed successfully: {update}")
-            return Response(status=HTTPStatus.OK)
-            
-        except KeyError as e:
-            logger.warning(f"Missing expected key in Acme message: {e}")
+        except ValueError as ve:
+            logger.warning(f"Validation error: {ve}")
             return Response(status=HTTPStatus.BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Error processing Acme webhook: {str(e)}")
+            logger.error(f"Unexpected error during payload processing: {e}", exc_info=True)
             return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
+        # Step 2: Trigger Synthetic Update if Auth Was Updated
+        try:
+            if update:
+                # Add the update to the queue for processing
+                await application.update_queue.put(update)
+            else:
+                logger.debug(f"No webhook trigger executed.")
+
+        except Exception as e:
+            logger.error(f"Error handling synthetic Telegram update: {str(e)}", exc_info=True)
+            return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        logger.info("Acme update processed successfully")
+        return Response(status=HTTPStatus.OK)
+
+    
     try:
         logger.debug("Starting webserver with Uvicorn.")
         webserver = uvicorn.Server(

@@ -31,7 +31,7 @@ try:
     # General Configuration
     PORT = get_env_var("PORT")
     ADMIN_CHAT_ID = get_env_var("ADMIN_CHAT_ID")
-
+    AUTH_EXPIRATION = 60 * 60 * 24 * 7  # 7 days in seconds
     # Detect environment: defaults to 'DEV'
     env = os.getenv('ENV', 'DEV').upper()
     if env not in ['DEV', 'PROD']:
@@ -47,6 +47,7 @@ try:
         ACME_URL = get_env_var("DEV_ACME_URL")
         ACME_APP_URL = os.getenv("DEV_ACME_APP_URL", "https://app.acme.am")
         ACME_API_KEY = get_env_var("DEV_ACME_API_KEY")
+        DEFAULT_ACME_API_KEY = os.getenv("DEV_DEFAULT_ACME_API_KEY", "")
         ACME_ENCRYPTION_KEY = bytes.fromhex(os.getenv("PROD_ACME_ENCRYPTION_KEY", ""))
         ACME_AUTH_URL = os.getenv("DEV_ACME_AUTH_URL", "")
         ACME_WEBHOOK_PEM = os.getenv("PROD_ACME_WEBHOOK_PEM", "")
@@ -55,8 +56,6 @@ try:
         CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')  # Fetch Cloudflare account ID
         CLOUDFLARE_HASH = os.getenv('CLOUDFLARE_HASH')  # Fetch Cloudflare API token
         BOT_USERNAME = os.getenv('PROD_BOT_USERNAME')  # Fetch bot username
-
-
     else:  # DEV environment
         logger.info("Running in DEVELOPMENT environment.")
         URL = get_env_var("DEV_URL")
@@ -66,6 +65,7 @@ try:
         ACME_URL = os.getenv("DEV_ACME_URL", "https://acme-qa.fly.dev/operations/dev")
         ACME_APP_URL = os.getenv("DEV_ACME_APP_URL", "https://dev.app.acme.am")
         ACME_API_KEY = os.getenv("DEV_ACME_API_KEY", "")
+        DEFAULT_ACME_API_KEY = os.getenv("DEV_DEFAULT_ACME_API_KEY", "")
         ACME_ENCRYPTION_KEY = bytes.fromhex(os.getenv("DEV_ACME_ENCRYPTION_KEY", ""))
         ACME_AUTH_URL = os.getenv("DEV_ACME_AUTH_URL", "")
         ACME_WEBHOOK_PEM = os.getenv("PROD_ACME_WEBHOOK_PEM", "")
@@ -78,13 +78,18 @@ except ValueError as e:
     logger.critical(f"Startup aborted due to configuration error: {e}")
     sys.exit(1)  # Exit if any critical configuration is missing
 
+
+DEFAULT_TIMEOUT = 3  # Timeout for the API request in seconds
+RETRY_COUNT = 2  # Number of retries on failure
+
 # Define conversation states
-SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECEIVER, WAITING_FOR_AUTH = range(4)
+SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECEIVER = range(3)
 
 # Global variables for valid and authenticated commands
-VALID_COMMANDS = {'trade', 'pay', 'request', 'share', 'list','delist', 'vault', 'start', 'menu','logout','cancel'}
+VALID_COMMANDS = {'trade', 'pay', 'request', 'share', 'top3', 'list', 'delist', 'vault', 'start', 'menu','logout','cancel','why_list','why_trade'}
 AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault', 'list'}
 # Define featured tokens for different intents
+
 FEATURED_TOKENS_TRADE = [
     {"PONKE":"PONKE"},
     {"POPCAT":"POPCAT"},
@@ -115,6 +120,50 @@ LIFI_API_URL = "https://li.quest/v1"
 COINGECKO_API_URL = "https://api.coingecko.com/api/v3/coins/{token_id}"
 logger.info("Configuration successfully loaded and validated.")
 
+PHOTO_COYOTE_BANANA = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/895a84b1-67b5-42e5-6fb1-b937d1151600/public"
+PHOTO_COYOTE_COOK = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/07774565-aab0-4471-068d-422e5c702700/public"
+PHOTO_COYOTE_CHAMPAGNE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/6df6cab5-27cc-4eda-ebbd-ea67821be000/public"
+PHOTO_COYOTE_CHEST = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/28c4155d-873c-4a54-52c3-a4a02e6eba00/public"
+PHOTO_COYOTE_MIC = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/00e0ad8a-c96d-4b5e-034f-21d9dcd4bd00/public"
+PHOTO_COYOTE_TABLE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/88bf2cea-caae-4e3c-3733-2fc6f9b2e000/public"
+
+WHY_TRADE = """
+☝️ *Tap. Trade. Done.*  
+_Trade any token in #OneTap_\n
+
+1️⃣ *Super Easy*
+Trade any token with bank cards — fast & easy.  
+
+2️⃣ *Best Prices* 
+Get top rates from DEXs and on-ramp providers.  
+
+3️⃣ *Full Control*
+Hold tokens in Safes securing *$100B+*. Only *you* have the keys.
+"""
+
+WHY_LIST = """
+\n*🔥 Start Your Exchange. Today.*  
+_Help others buy your favorite tokens!_\n
+
+1️⃣ *List → Share*
+Easily list any token & share.
+
+2️⃣ *Share → Buy*
+Buy shared tokens with bank cards — super easy!
+
+3️⃣ *Buy → Earn*
+Earn up to 1% fees & rewards on each trade — instantly.
+"""
+
+FAQ = """
+\n﹒﹒﹒\n
+🌐 _Chains:_
+Solana, Base, Polygon, Arbitrum, BSC  
+
+💳 _Payments:_
+VISA, MasterCard 🌍
+\n﹒﹒﹒
+"""
 payload = {
     "chainId": "42161",
     "contractAddress": "0xA3090C10b2dD4B69A594CA4dF7b1F574a8D0B476",

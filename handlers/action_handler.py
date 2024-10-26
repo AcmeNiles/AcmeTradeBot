@@ -1,222 +1,209 @@
 from config import logger
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update
 from telegram.ext import ConversationHandler, ContextTypes
 from config import AUTHENTICATED_COMMANDS
 from actions.menu import process_menu
 from actions.trade import process_trade
 from actions.list import process_list
-from utils.getAcmeProfile import process_user_tokens
-from handlers.auth_handler import is_authenticated, login_card
+from utils.getAcmeProfile import process_user_top3
+from utils.reply import send_why_list, send_why_trade
+from handlers.auth_handler import is_authenticated, login_card, store_auth_result, get_auth_result, get_user_top3
 from handlers.token_handler import handle_token
 from handlers.receiver_handler import handle_receiver
 import time
-from config import SELECT_TOKEN, SELECT_RECEIVER, SELECT_AMOUNT, WAITING_FOR_AUTH
+from config import SELECT_TOKEN, SELECT_RECEIVER, SELECT_AMOUNT
 
 async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Routes the action based on the user's intent.
-    Delegates execution to `execute_action` and manages states for menus and unrecognized intents.
+    Routes the action based on the user's intent, handling authentication,
+    token, receiver, and amount validation, then executing the action.
     """
-    intent = context.user_data.get('intent')
-    logger.info(f"Processing action for intent: {intent}")
-
-    # Retrieve tg_key and auth_result from user context
-    auth_result = context.user_data.get('auth_result')
-
-    # Authenticate if not already cached
-    if not auth_result:
-        start_time = time.time()  # Start timing authentication
-        auth_result = await is_authenticated(update, context)
-        logger.info(f"is_authenticated took {time.time() - start_time:.2f} seconds.")
-        #logger.info(f"New authentication result: {auth_result}")
-
-    # Log the retrieved or newly fetched auth result and tg_key
-    #logger.info(f"Authentication result for {intent}: {auth_result}")
-    
-    # Helper function to handle state transitions
-    async def check_state(state):
-        if state in {SELECT_TOKEN, SELECT_RECEIVER, SELECT_AMOUNT}:
-            return state  # Pause and wait for input
-        return await execute_action(update, context)  # Proceed to action execution
-
-    # Early return for basic intents (logout, menu, start, or cancel)
-    if intent in {'logout', 'start', 'menu', 'cancel'}:
-        logger.info(f"User initiated {intent} action, clearing data and routing to menu.")
-        if intent == 'logout':
-            context.user_data.clear()  # Clear all data on logout
-        context.user_data['intent'] = 'menu'
-        return await execute_action(update, context)
-
-    # Handle vault intent separately
-    if intent == 'vault':
-        logger.info("Vault action detected, executing vault intent.")
-        return await execute_action(update, context)
-
-    # Handle trade, share, and buy intents with token and receiver checks
-    if intent in {'trade', 'share', 'buy'}:
-        receiver = context.user_data.get('receiver', None)
-        tokens = context.user_data.get('tokens', [])
-        # Case 1: Handle receiver only (when receiver exists and token is missing or empty)
-        if receiver is not None and (tokens is None or tokens == []):
-            logger.info("Handling receiver only; executing action.")
-            state = await handle_receiver(update, context)
-            context.user_data['intent'] = 'list'  # Set intent to 'list'
-            return await execute_action(update, context) if state != SELECT_RECEIVER else state
-
-        # Case 2: Handle token only (when token exists and receiver is missing or None)
-        elif tokens is not None and tokens != [] and receiver is None:
-            logger.info("Handling token only; executing action.")
-            state = await handle_token(update, context)
-            return await execute_action(update, context) if state != SELECT_TOKEN else state
-
-        # Case 3: Handle both token and receiver (when both exist)
-        elif tokens is not None and tokens != [] and receiver is not None:
-            logger.info("Handling both token and receiver.")
-            receiver_state = await handle_receiver(update, context)
-            token_state = await handle_token(update, context)
-
-            if token_state != SELECT_TOKEN or receiver_state != SELECT_RECEIVER:
-                return await execute_action(update, context)
-
-            # If both are invalid, validate token and wait for input if needed
-            return await handle_token(update, context)
-
-        # Case 4: Handle neither token nor receiver for 'share' (if no token and intent is 'share')
-        elif intent == "share" and (tokens is None or tokens == []):
-            logger.info("Handling 'share' with no token, proceeding to execute action.")
-            return await execute_action(update, context)
-
-        # Case 5: Handle neither token nor receiver (default case when both are missing)
-        else:
-            state = await handle_token(update, context)
-            if state == SELECT_TOKEN:
-                return state
-            return await execute_action(update, context)
-
-    # Handle pay and request intents with sequential validation
-    if intent in {'pay', 'request'}:
-        if 'token' in context.user_data:
-            logger.info("Validating token first in pay/request intent.")
-            state = await handle_token(update, context)
-            if state == SELECT_TOKEN:
-                return state  # Wait for token input
-
-        if 'receiver' in context.user_data:
-            logger.info("Validating receiver in pay/request intent.")
-            state = await handle_receiver(update, context)
-            if state == SELECT_RECEIVER:
-                return state  # Wait for receiver input
-
-        if 'amount' not in context.user_data:
-            logger.info("Requesting amount input.")
-            state = await handle_amount(update, context)
-            if state == SELECT_AMOUNT:
-                return state  # Wait for amount input
-
-        # All required inputs are validated, execute the action
-        return await execute_action(update, context)
-
-    # Handle list intents separately (use first token by default)
-    if intent == 'list':
-        logger.info("Handling list intent, routing to token handler.")
-        # Check if the user needs to log in for certain intents
-        if 'url' in auth_result:
-            # User not authenticated; redirect to login
-            logger.info(f"User not authenticated for {intent}. Redirecting to login.")
-            start_time = time.time()  # Start timing login_card
-            result = await login_card(update, context, auth_result)
-            logger.info(f"login_card took {time.time() - start_time:.2f} seconds.")
-            return result
-        else:
-            await process_user_tokens(update, context)
-            state = await handle_token(update, context)
-            if state == SELECT_TOKEN:
-                return state  # Wait for token input
-            return await execute_action(update, context)
-
-    # Handle unrecognized intents by routing to menu
-    logger.warning(f"Unrecognized intent: {intent}, redirecting to menu.")
-    context.user_data['intent'] = 'menu'
-    return await execute_action(update, context)
-
-
-async def execute_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Executes the action based on the user's intent, token, amount, and receiver.
-    """
-
-    intent = context.user_data.get('intent')
-    auth_result = context.user_data.get('auth_result')
+    intent = context.user_data.get('intent') or None
+    auth_result = await get_auth_result(update, context) or await authenticate_user(update, context)
     tokens = context.user_data.get('tokens') or None
-
-    # Handle 'start' or 'menu' intents
-    if intent in ['start', 'menu']:
-        start_time = time.time()  # Start timing process_menu
-        result = await process_menu(update, context)
-        logger.info(f"process_menu took {time.time() - start_time:.2f} seconds.")
-        return result
-
-    # Check if the user needs to log in for certain intents
-    if intent in AUTHENTICATED_COMMANDS and 'url' in auth_result:
-        # User not authenticated; redirect to login
-        logger.info(f"User not authenticated for {intent}. Redirecting to login.")
-        start_time = time.time()  # Start timing login_card
-        result = await login_card(update, context, auth_result)
-        logger.info(f"login_card took {time.time() - start_time:.2f} seconds.")
-        return result
-
-    logger.info(f"Executing action: {intent}")
-
-    # Execute the appropriate action based on the user's intent
-    if intent == 'list':
-        # If intent is 'list', return all tokens as an array
-        start_time = time.time()  # Start timing process_trade
-        await process_list(update, context)
-        logger.info(f"process_list took {time.time() - start_time:.2f} seconds.")
-        return ConversationHandler.END
-
-    if intent in ['trade', 'buy','share']:
-        if intent == 'share' and (tokens is None or tokens == []):
-            start_time = time.time()  # Start timing process_pay
-            await process_user_tokens(update, context)
-            context.user_data['tokens'] = context.user_data['auth_result']['tokens']
-            await process_list(update, context)
-            logger.info(f"process_share took {time.time() - start_time:.2f} seconds.")
-            return ConversationHandler.END
-        else:
-            start_time = time.time()  # Start timing process_trade
-            await process_trade(update, context)
-            logger.info(f"process_trade took {time.time() - start_time:.2f} seconds.")
-            return ConversationHandler.END
     
-    # Check if intent is 'share', if yes, process user and list
+    logger.info(f"User {update.effective_user.id} - Processing action for intent: {intent}")
 
-        # Otherwise, just prompt for token
-    elif intent == 'pay':
-        start_time = time.time()  # Start timing process_pay
-        await process_pay(update, context)
-        logger.info(f"process_pay took {time.time() - start_time:.2f} seconds.")
-    elif intent == 'request':
-        start_time = time.time()  # Start timing process_request
-        await process_request(update, context)
-        logger.info(f"process_request took {time.time() - start_time:.2f} seconds.")
-    else:
-        logger.error(f"Unknown intent: {intent}")
-        await update.message.reply_text("An error occurred. Please try again.")
+    # Handle special intents ('logout', 'start', 'menu', 'cancel','why_trade','why_list')
+    if intent in {'logout', 'start', 'menu', 'cancel'}:
+        return await handle_special_intents(update, context, intent)
+
+    if intent in {'why_trade'}:
+    # Handle special intents ('logout', 'start', 'menu', 'cancel')
+        return await send_why_trade(update, context)
+    if intent in {'why_list'}:
+        # Handle special intents ('logout', 'start', 'menu', 'cancel')
+        return await send_why_list(update, context)
+
+    # Redirect if authentication is required
+    if intent in AUTHENTICATED_COMMANDS and (not auth_result or 'url' in auth_result):
+        return await handle_login_redirect(update, context, auth_result, intent)
+
+    # Handle trade-related intents
+    if intent in {'trade', 'top3', 'share', 'buy'}:
+        return await handle_trade_related(update, context, tokens)
+
+    # Handle 'list' intent
+    if intent == 'list':
+        return await handle_list_intent(update, context)
+
+    # Handle 'pay' and 'request' intents
+    if intent in {'pay', 'request'}:
+        return await handle_payment_intents(update, context, intent)
+
+    logger.warning(f"User {update.effective_user.id} - Unrecognized intent: {intent}, redirecting to menu.")
+    context.user_data['intent'] = 'menu'
+    return await process_menu(update, context)
+
+async def authenticate_user(update, context):
+    """Authenticate the user if auth_result is not available.
+
+    Returns:
+        dict: The authentication result if successful, or None if authentication fails.
+    """
+    start_time = time.time()
+    user_tg_username = update.effective_user.username
+
+    try:
+        auth_result = await is_authenticated(update, context)
+        logger.info(f"User {update.effective_user.id} - Authentication took {time.time() - start_time:.2f} seconds.")
+
+        # Store the authentication result using the store_auth_result function
+        if auth_result:
+            success = await store_auth_result(context.application, user_tg_username, auth_result)
+            if success:
+                logger.info(f"Successfully stored auth result for user: {user_tg_username}")
+            else:
+                logger.warning(f"Failed to store auth result for user: {user_tg_username}")
+
+        return auth_result if auth_result else None
+    except aiohttp.ClientError as e:
+        logger.error(f"User {update.effective_user.id} - Network error during authentication: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"User {update.effective_user.id} - Authentication failed: {str(e)}")
+        return None
+
+async def handle_special_intents(update, context, intent):
+    """Handles 'logout', 'start', 'menu', or 'cancel' intents."""
+    logger.info(f"User {update.effective_user.id} - Initiated {intent} action, clearing data and routing to menu.")
+    if intent == 'logout':
+        context.user_data.clear()  # Clear all data on logout
+    context.user_data['intent'] = 'menu'
+    return await process_menu(update, context)
+
+
+async def handle_login_redirect(update, context, auth_result, intent):
+    """Handles login redirection for unauthenticated users."""
+    logger.info(f"User {update.effective_user.id} - Not authenticated for {intent}. Redirecting to login.")
+    start_time = time.time()  # Start timing login_card
+    result = await login_card(update, context, auth_result)
+    logger.info(f"User {update.effective_user.id} - login_card took {time.time() - start_time:.2f} seconds.")
+    return ConversationHandler.END
+
+async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYPE, tokens):
+    """Handles intents like 'trade', 'top3', 'share', and 'buy'."""
+    receiver = context.user_data.get('receiver')
+    logger.debug(f"User {update.effective_user.id} - Handling trade-related intent. Tokens: {tokens}, Receiver: {receiver}")
+
+    # Case 1: Both tokens and receiver are None
+    if not tokens and not receiver:
+        # Check for 'top3' intent
+        if context.user_data.get('intent') == "top3":
+            logger.info(f"User {update.effective_user.id} - Special 'top3' intent. Fetching user tokens.")
+
+            # Retrieve top3 tokens for the user via helper function
+            top3_tokens = await get_user_top3(update, context)
+
+            # If top3 tokens are empty or incomplete, process to populate top3
+            if not top3_tokens or len(top3_tokens) < 3:
+                await process_user_top3(update, context)
+
+                # Fetch updated top3 tokens after processing
+                top3_tokens = await get_user_top3(update, context)
+
+            # If we have exactly 3 tokens, proceed with the `process_list`
+            if top3_tokens and len(top3_tokens) == 3:
+                context.user_data['tokens'] = top3_tokens
+                return await process_list(update, context)
+            else:
+                logger.info(f"User {update.effective_user.id} - 'top3' tokens incomplete or missing, redirecting to token selection.")
+                state = await handle_token(update, context)
+                return state if state == SELECT_TOKEN else ConversationHandler.END
+
+        # If 'top3' intent is not set, redirect to token selection as usual
+        logger.info(f"User {update.effective_user.id} - Both tokens and receiver are missing. Redirecting to token selection.")
+        state = await handle_token(update, context)
+        return state if state == SELECT_TOKEN else ConversationHandler.END
+
+    # Case 2: Receiver exists, but tokens are None
+    if receiver and not tokens:
+        state = await handle_receiver(update, context)
+        context.user_data['intent'] = 'list'
+        if state != SELECT_RECEIVER:
+            return await process_list(update, context)
+        return state if state == SELECT_RECEIVER else ConversationHandler.END
+
+    # Case 3: Tokens exist, but receiver is None
+    if tokens and not receiver:
+        state = await handle_token(update, context)
+        if state != SELECT_TOKEN:
+            return await process_trade(update, context)
+        return state if state == SELECT_TOKEN else ConversationHandler.END
+
+    # Case 4: Both tokens and receiver exist
+    if tokens and receiver:
+        receiver_state = await handle_receiver(update, context)
+        token_state = await handle_token(update, context)
+
+        # Proceed to `process_trade` if neither state is `SELECT_TOKEN` or `SELECT_RECEIVER`
+        if token_state != SELECT_TOKEN and receiver_state != SELECT_RECEIVER:
+            return await process_trade(update, context)
+
+        # If the states require further interaction, end the conversation
         return ConversationHandler.END
 
-    # Retain tg_key and auth_result while clearing other user data
-    logger.info(f"Action {intent} completed successfully. Clearing user data except auth_result and tg_key.")
+async def handle_list_intent(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles 'list' intent by guiding users to select or update their top3 tokens before listing."""
+    user_id = update.effective_user.id
+    logger.info(f"User {user_id} - Handling 'list' intent. Initiating token selection if required.")
 
-    # Store the necessary data before clearing
-    auth_result = context.user_data.get('auth_result')
-    invite_link = context.user_data.get('invite_link')
+    # Redirect to token selection for updating or confirming top3 tokens
+    state = await handle_token(update, context)
 
-    # Clear the user_data and retain only the required keys
-    context.user_data.clear()  # Clear all existing data
-    context.user_data.update({
-        'auth_result': auth_result,
-        'invite_link': invite_link
-    })
+    # Only proceed if token selection is complete (state is not SELECT_TOKEN)
+    if state != SELECT_TOKEN:
+        # Update top3 tokens after token selection is complete
+        top3_tokens = await get_user_top3(update, context)
+        context.user_data['tokens'] = top3_tokens
 
+        # Proceed to process the list with updated tokens
+        return await process_list(update, context)
+
+    # If further token selection interaction is needed, return the current state
+    return state if state == SELECT_TOKEN else ConversationHandler.END
+
+async def handle_payment_intents(update, context, intent):
+    """Handles 'pay' and 'request' intents with validation."""
+    logger.info(f"User {update.effective_user.id} - Handling {intent} intent.")
+
+    # Token validation
+    if 'token' in context.user_data:
+        state = await handle_token(update, context)
+        if state == SELECT_TOKEN:
+            return state
+
+    # Receiver validation
+    if 'receiver' in context.user_data:
+        state = await handle_receiver(update, context)
+        if state == SELECT_RECEIVER:
+            return state
+
+    # Amount validation
+    if 'amount' not in context.user_data:
+        state = await handle_amount(update, context)
+        if state == SELECT_AMOUNT:
+            return state
+
+    await process_pay(update, context) if intent == 'pay' else await process_request(update, context)
     return ConversationHandler.END

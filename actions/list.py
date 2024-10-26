@@ -1,11 +1,14 @@
-from config import logger, BOT_USERNAME, MAX_LISTED_TOKENS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import CallbackContext, ConversationHandler
-from utils.createTradingLink import create_trading_link
-from utils.reply import send_message, send_photo
-from utils.getTokenMarketData import fetch_and_format_token_market_data
+from telegram.helpers import escape_markdown
+from config import logger, BOT_USERNAME, MAX_LISTED_TOKENS, PHOTO_COYOTE_TABLE
+from utils.reply import send_message, send_photo, send_error_message, clear_cache, send_edit_top3_message
 from utils.profilePhoto import fetch_user_profile_photo
-from messages_photos import PHOTO_EXCHANGE, markdown_v2
+from utils.tokenValidator import fetch_and_format_token_data
+from handlers.auth_handler import get_auth_result
+
+from messages_photos import PHOTO_EXCHANGE
+from messages_photos import markdown_v2
 
 # Configurable exchange message
 EXCHANGE = (
@@ -15,140 +18,71 @@ EXCHANGE = (
     "💸 Let’s make some money!"
 )
 
-TOKEN_TEMPLATE = (
-    "*{index}️⃣ [{symbol}]({trading_link})*\n"
-    " ├ Price: *{price}*\n"
-    " ├ 24H: *{change_24h}*\n"
-    " ├ MCap: *${mcap}*\n\n"
-    #"🔄 Circulating Supply: *{circulating_supply}*\n"
-)
-
+NO_TOKENS = "No tokens available for processing"
+NO_VALID_TOKENS = "No valid tokens to display."
+ERROR_OCCURRED = "An error occurred. Please try again."
 
 async def process_list(update: Update, context: CallbackContext) -> int:
     logger.info("Processing list request.")
     try:
-        # Initialize tokens safely (default to an empty list if not found)
         tokens = context.user_data.get('tokens', [])
-
-        # Safely fetch receiver data (ensure it's a dictionary)
-        receiver_data = context.user_data.get('receiver', {})
-
-        # Check for 'name' and 'tokens' in receiver data
-        if receiver_data and 'name' in receiver_data and 'tokens' in receiver_data:
-            username = receiver_data['name']
-        else:
-            # Fallback to 'tg_firstName' from 'auth_result'
-            username = context.user_data.get('auth_result', {}).get('tg_firstName', "")
-
-        # If still no username, use the bot's default username
-        if not username:
-            username = BOT_USERNAME
-
-        # Check for tokens; if not found, send a warning and end conversation
         if not tokens:
             logger.warning("No tokens found in user data.")
-            await send_message(update, context, "No tokens available for processing.")
+            await send_error_message(update, context)
             return ConversationHandler.END
+            
+        receiver_data = context.user_data.get('receiver') or {}
+        auth_result = await get_auth_result(update, context) or {}
 
-        # Prepare combined message text and buttons
+        # Safely get username
+        username = receiver_data.get('name') or auth_result.get('tg_firstName') or BOT_USERNAME
+
+    
         combined_text = ""
         buttons = []
-        max_tokens_to_process = min(len(tokens), MAX_LISTED_TOKENS)  # Limit to a maximum of 3 tokens
-        max_buttons_to_process = min(len(tokens), MAX_LISTED_TOKENS)  # Limit to a maximum of 3 buttons
+        max_tokens_to_process = min(len(tokens), MAX_LISTED_TOKENS)
 
-        # Iterate over the first max_tokens_to_process tokens and process them
-        for idx in range(max_tokens_to_process):
-            token = tokens[idx]  # Directly access the token by index
-
+        for idx, token in enumerate(tokens[:max_tokens_to_process], start=1):
             try:
-                symbol = token.get('symbol', '').strip().upper()
-                chain_id = token.get('chain_id')
-                contract_address = token.get('contract_address')
-                decimals = token.get('decimals')
-                trading_link = token.get('tradingLink')  # Retrieve the trading link early
-
-                logger.info(f"Processing token {symbol} (Chain ID: {chain_id})")
-
-                if not chain_id or not contract_address:
-                    logger.warning(f"Skipping token {symbol} due to missing chain ID or contract address.")
-                    continue  # Skip this token
-
-                if not trading_link:
-                    logger.error(f"Missing trading link for {symbol}.")
-                    continue  # Skip this token if the trading link is not available
-
-                # Use the trading link and proceed with other logic
-                logger.info(f"Trading link for {symbol}: {trading_link}")
-
-                token_market_data = await fetch_and_format_token_market_data(
-                    contract_address, chain_id, decimals
-                )
-                logger.debug(f"Market data for {symbol}: {token_market_data}")
-
-                # Format the trading card text with the trading link
-                trading_card_text = TOKEN_TEMPLATE.format(
-                    index=idx + 1,  # Token number starts from 1
-                    symbol=symbol,
-                    trading_link=trading_link,  # Pass the trading link to the template
-                    price=token_market_data.get('price', 'N/A'),
-                    change_24h=token_market_data.get('change_24h', 'N/A'),
-                    mcap=token_market_data.get('mcap', 'N/A'),
-                    #volume_24h=token_market_data.get('volume_24h', 'N/A'),
-                )
-
-                # Append text to combined message
+                # Pass the current index to handle the symbol selection
+                trading_card_text, button = await fetch_and_format_token_data(token, username, idx)
                 combined_text += trading_card_text
-
-                # Add a button only if the max_buttons_to_process limit is not exceeded
-                if len(buttons) < max_buttons_to_process:
-                    buttons.append(
-                        InlineKeyboardButton(f"{symbol}", url=trading_link)
-                    )
-
+                buttons.append(button)  # Add the button to the list
             except Exception as e:
-                logger.exception(f"Error processing token {symbol}: {e}")
-                continue  # Continue to the next token
+                logger.exception(f"Error processing token {token.get('symbol', '')}: {e}")
 
-        # Determine the correct label for number of tokens
-        token_count_label = "Token" if max_tokens_to_process == 1 else "Tokens"
-
-        # Logic to determine whether to add 's or just ' based on the username ending
+        # In case there's no combined text
+        if not combined_text:
+            logger.exception(f"Error processing token {token.get('symbol', '')}: {e}")
+            await send_error_message(update, context)
+            return ConversationHandler.END
+            
         username_display = f"{username}'" if username.endswith('s') else f"{username}'s"
 
-        # Create the final message using the EXCHANGE format
         final_message = markdown_v2(EXCHANGE.format(
-            tokens=combined_text,
-            username_display=username_display,  # Use the processed username
-            bot_username=BOT_USERNAME,
-            TOKEN_OR_TOKENS=token_count_label
+            tokens=combined_text,  # Escape combined_text
+            username_display=username_display,
+            bot_username=BOT_USERNAME
         ))
-        # Create reply markup with buttons in a single row
-        reply_markup = InlineKeyboardMarkup([buttons]) if buttons else None
 
-        # Fetch user's profile photo
-        logger.info("Getting photo now.")
+        reply_markup = InlineKeyboardMarkup(
+            [
+                buttons,
+                [InlineKeyboardButton("Learn more", url=f"https://www.acme.am")]
+            ]) if buttons else None
+        profile_photo = PHOTO_COYOTE_TABLE
+        #profile_photo = await fetch_user_profile_photo(update, context) or PHOTO_EXCHANGE
 
-        # Attempt to fetch the user's profile photo
-        #profile_photo = await fetch_user_profile_photo(update, context)
-        profile_photo = PHOTO_EXCHANGE
-
-        logger.info(f"Photo is {profile_photo}.")
-        # If the profile photo fetch fails, use the default PHOTO_TRADE
-        if not profile_photo:
-            logger.warning(f"No profile photo available for user. Using default photo.")
-            profile_photo = PHOTO_EXCHANGE  # Use the default photo if fetching fails
-
-        # Send the photo with the final message and buttons
         await send_photo(update, context, profile_photo, final_message, reply_markup)
         logger.info("Successfully sent the combined trading message.")
+        await send_edit_top3_message(update, context)
+        return await clear_cache(update, context)
 
     except KeyError as e:
-        # Log unexpected missing keys and handle the error gracefully
         logger.error(f"Missing key in user data: {e}")
-        await send_message(update, context, "An error occurred. Please try again.")
-        return ConversationHandler.END
+        await send_message(update, context, escape_markdown(ERROR_OCCURRED))
     except Exception as e:
-        # Catch any other exceptions to prevent crashes
         logger.exception(f"Unexpected error: {e}")
-        await send_message(update, context, "An unexpected error occurred.")
+        await send_message(update, context, escape_markdown(ERROR_OCCURRED))
+    finally:
         return ConversationHandler.END

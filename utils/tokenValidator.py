@@ -1,15 +1,26 @@
+import re
+import aiohttp
+from telegram import Update, InlineKeyboardButton
+from telegram.ext import ContextTypes
+from telegram.helpers import escape_markdown
 from config import logger, SUPPORTED_CHAIN_IDS, LIFI_API_URL, ACME_APP_URL
 from utils.createTradingLink import create_trading_link
-import aiohttp
-from telegram import Update
-from telegram.ext import ContextTypes
-import re
+from utils.getTokenMarketData import fetch_and_format_token_market_data
+
 
 # Regex pattern to detect if the token is an EVM contract address (42 hex characters)
 EVM_CONTRACT_ADDRESS_PATTERN = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
 # Regex pattern for detecting Solana Virtual Machine (SVM) contract addresses (Base58, typically 32 bytes)
 SVM_CONTRACT_ADDRESS_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+
+TOKEN_TEMPLATE = (
+    "*{index}️ [{symbol}]({trading_link})*\n"
+    " ├ Price: *{price}*\n"
+    " ├ 24H: *{change_24h}*\n"
+    " ├ MCap: *${mcap}*\n\n"
+    #"🔄 Circulating Supply: *{circulating_supply}*\n"
+)
 
 async def validate_tokens(requested_tokens, update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validate requested tokens and store valid ones in user context."""
@@ -27,7 +38,8 @@ async def validate_tokens(requested_tokens, update: Update, context: ContextType
             if token_data and "error" not in token_data:
                 token_address = token_data.get("contract_address")
                 intent_id = await get_intent_id_from_auth(context, token_address)
-                trading_link = await generate_trading_link(context, token_data, intent_id)
+                trading_link = await generate_trading_link(update, context, token_data, intent_id)
+
                 if trading_link:
                     token_data["tradingLink"] = trading_link
                     valid_tokens.append(token_data)
@@ -48,14 +60,14 @@ async def validate_tokens(requested_tokens, update: Update, context: ContextType
             token_data = await fetch_token_data_from_chains(token=token_address, chain_id=chain_id)
 
             if token_data and "error" not in token_data:
-                trading_link = await generate_trading_link(context, token_data, intent_id)
+                trading_link = await generate_trading_link(update, context, token_data, intent_id)
 
                 if trading_link:
                     token_data["tradingLink"] = trading_link
                     valid_tokens.append(token_data)
                     logger.info(f"Valid token object: {token_data['symbol']} ({token_address})")
                 else:
-                    logger.error(f"Failed to create trading link for token object.")
+                    logger.error("Failed to create trading link for token object.")
                     invalid_tokens.append(token)
             else:
                 logger.warning(f"Invalid token object: {token}")
@@ -67,21 +79,27 @@ async def validate_tokens(requested_tokens, update: Update, context: ContextType
     logger.info(f"Validation completed. Valid tokens: {len(valid_tokens)}, Invalid tokens: {len(invalid_tokens)}")
     return valid_tokens, invalid_tokens
 
-async def generate_trading_link(context: ContextTypes.DEFAULT_TYPE, token_data, intent_id):
+
+async def generate_trading_link(update: Update, context: ContextTypes.DEFAULT_TYPE, token_data, intent_id):
     """Generate a trading link using an existing or newly created intent ID."""
     logger.debug(f"Generating trading link for token: {token_data['symbol']}")
-    if intent_id:
-        trading_link = f"{ACME_APP_URL}/buy/{intent_id}"
-        logger.debug(f"Using existing intent ID for trading link: {trading_link}")
-    else:
-        chain_id = token_data.get("chain_id")
-        token_address = token_data.get("contract_address")
-        trading_link = await create_trading_link(context, chain_id, token_address, "")
+    trading_link = None  # Initialize trading_link as None
 
-        if trading_link:
-            logger.debug(f"Successfully created trading link: {trading_link}")
+    try:
+        if intent_id:
+            trading_link = f"{ACME_APP_URL}/buy/{intent_id}"
+            logger.debug(f"Using existing intent ID for trading link: {trading_link}")
         else:
-            logger.error(f"Failed to create trading link for token: {token_data}")
+            chain_id = token_data.get("chain_id")
+            token_address = token_data.get("contract_address")
+            trading_link = await create_trading_link(update, context, chain_id, token_address, "")
+
+            logger.debug(f"Successfully created trading link: {trading_link}")
+
+    except ValueError as e:
+        logger.error(f"Error generating trading link for token {token_data['symbol']}: {e}")
+        # You can raise the error or return None if you want to handle it at a higher level
+        trading_link = None  # Set trading_link to None to indicate failure
 
     return trading_link
 
@@ -162,3 +180,54 @@ def extract_token_data(token_data):
     except KeyError as e:
         logger.exception(f"Missing field during extraction: {e}")
         return {"error": "Incomplete token data."}
+
+async def fetch_and_format_token_data(token, username, index):
+    """
+    Fetches market data for a token and formats it into a text template.
+
+    Args:
+    - token (dict): The token data containing 'symbol', 'chain_id', 'contract_address', 'decimals', and 'tradingLink'.
+    - username (str): The username to be displayed in the message.
+    - index (int): The index or rank of the token.
+
+    Returns:
+    - tuple: Formatted text, trading link for the token, and the button.
+    """
+    symbol = token.get('symbol', '').strip().upper()
+    chain_id = token.get('chain_id')
+    contract_address = token.get('contract_address')
+    decimals = token.get('decimals')
+    trading_link = token.get('tradingLink', '')
+
+    if not chain_id or not contract_address or not trading_link:
+        raise ValueError(f"Missing required token data for {symbol}.")
+
+    token_market_data = await fetch_and_format_token_market_data(contract_address, chain_id, decimals)
+
+    # Determine the appropriate index symbol
+    if index == 0:
+        index_symbol = "📈"  # For the first token
+    elif index == 1:
+        index_symbol = "🥇"
+    elif index == 2:
+        index_symbol = "🥈"
+    elif index == 3:
+        index_symbol = "🥉"
+    else:
+        index_symbol = f"{index + 1}️⃣"  # Use numeric emojis for tokens beyond the top 3
+
+    # Format the trading card text
+    trading_card_text = TOKEN_TEMPLATE.format(
+        index=index_symbol,
+        symbol=symbol,
+        trading_link=trading_link,
+        price=token_market_data.get('price', 'N/A'),
+        change_24h=token_market_data.get('change_24h', 'N/A'),
+        mcap=token_market_data.get('mcap', 'N/A'),
+    )
+
+    # Create the button label based on index
+    button_label = f"Trade {symbol}" if index == 0 else symbol
+    button = InlineKeyboardButton(button_label, url=trading_link)
+    
+    return trading_card_text, button  # Return both text and button
