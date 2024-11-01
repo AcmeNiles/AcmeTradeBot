@@ -1,7 +1,10 @@
+from config import logger, SELECT_RECEIVER
 from telegram import Update
 from telegram.ext import ContextTypes
-from utils.getAcmeProfile import get_acme_public_profile, get_user_listed_tokens, validate_user_and_tokens
+from utils.getAcmeProfile import validate_user_and_tokens
 from utils.tokenValidator import validate_tokens
+from utils.reply import delete_loading_message
+
 
 async def handle_receiver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Main handler to process the receiver input and route based on validation."""
@@ -12,10 +15,10 @@ async def handle_receiver(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not receiver_username:
         return await prompt_for_receiver(update, context)
 
-    return await process_receiver(receiver_username, update, context)
+    return await process_receiver(update, context, receiver_username)
 
 
-async def process_receiver(receiver_username: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def process_receiver(update: Update, context: ContextTypes.DEFAULT_TYPE, receiver_username: str) -> int:
     """Validate the user and tokens, and proceed based on the result."""
     acme_user_data, valid_tokens, error_message = await validate_user_and_tokens(receiver_username, update, context)
 
@@ -34,6 +37,7 @@ async def prompt_for_receiver(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = "Please enter the receiver's username."
     if error_message:
         message += f"\nError: {error_message}"
-
+        
+    await delete_loading_message(update, context)
     await update.message.reply_text(message)
     return SELECT_RECEIVER

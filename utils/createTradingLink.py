@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from config import logger, DEFAULT_ACME_API_KEY, ACME_URL, DEFAULT_TIMEOUT, RETRY_COUNT
 from utils.reply import send_error_message  # Ensure you import the necessary utility functions
 
+
 async def create_trading_link(update: Update,
     context: ContextTypes.DEFAULT_TYPE, chain_id: str, token_address: str, redirect_url: str
 ) -> str:
@@ -26,9 +27,12 @@ async def create_trading_link(update: Update,
     Raises:
         ValueError: If any required argument is missing or if the API request fails.
     """
+    from handlers.auth_handler import get_auth_result
 
-    # Get API key from user data or default
-    acme_api_key = context.user_data.get("auth_result", {}).get("api_key", DEFAULT_ACME_API_KEY)
+    # Get API key from user data or fallback to default
+    auth_result = await get_auth_result(update, context)
+    acme_api_key = auth_result.get('api_key') if auth_result and 'api_key' in auth_result else DEFAULT_ACME_API_KEY
+
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -47,7 +51,7 @@ async def create_trading_link(update: Update,
         "redirectUrl": redirect_url,
     }
 
-    logger.debug(f"Calling Trade: {acme_api} {headers} {payload}")
+    #logger.debug(f"Calling Trade: {acme_api} {headers} {payload}")
     
     for attempt in range(RETRY_COUNT):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)) as session:

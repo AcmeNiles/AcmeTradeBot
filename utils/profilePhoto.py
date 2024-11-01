@@ -4,7 +4,7 @@ from urllib.parse import unquote
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, CLOUDFLARE_HASH, logger
+from config import CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, CLOUDFLARE_HASH, PHOTO_COYOTE_CHEST, logger
 
 # Function to check if the image already exists in Cloudflare
 async def image_exists_in_cloudflare(image_id: str) -> bool:
@@ -73,4 +73,4 @@ async def fetch_user_profile_photo(update: Update, context: ContextTypes.DEFAULT
     except Exception as e:
         logger.error(f"Error while fetching user profile photo URL for user_id {user_id}: {e}")
 
-    return None  # Return None if no profile photo is found or an error occurs
+    return PHOTO_COYOTE_CHEST  # Return COYOTE_CHEST if no profile photo is found or an error occurs

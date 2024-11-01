@@ -1,8 +1,17 @@
+import random
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext, ConversationHandler, ContextTypes
 from config import logger, PHOTO_COYOTE_BANANA, ACME_GROUP, WHY_LIST, WHY_TRADE
 from messages_photos import markdown_v2
 from utils.membership import get_invite_link
+
+LOADING = [
+    "_Cooking up your exchange... 🍳 Just a sec!_",
+    "_Tuning your exchange... 🛠️ Just a sec!_",
+    "_Firing up your exchange... 🔥 Just a sec!_",
+    "_Setting the stage for your exchange... 🎤 Just a sec!_",
+    "_Gearing up your exchange... ⚙️ Just a sec!_",
+]
 
 async def say_hi_button(update, context):
     """
@@ -37,7 +46,7 @@ async def send_message(update: Update, context: CallbackContext, text: str, repl
     buttons = reply_markup.inline_keyboard if reply_markup else []
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    await context.bot.send_message(
+    return await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode="MarkdownV2", 
@@ -52,14 +61,14 @@ async def send_photo(update: Update, context: CallbackContext, photo_url: str, c
         reply_markup = InlineKeyboardMarkup(buttons)
 
         if update.message:
-            await update.message.reply_photo(
+            return await update.message.reply_photo(
                 photo=photo_url,
                 caption=caption,
                 parse_mode="MarkdownV2",
                 reply_markup=reply_markup,
             )
         elif update.callback_query:
-            await update.callback_query.message.reply_photo(
+            return await update.callback_query.message.reply_photo(
                 photo=photo_url,
                 caption=caption,
                 parse_mode="MarkdownV2",
@@ -189,29 +198,86 @@ async def send_why_list(update: Update, context) -> int:
 async def send_edit_top3_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message prompting the user to edit their top 3 tokens."""
     message_text = markdown_v2(
-        "*👆 Share → Earn on every trade! 💸\n\n*"
-        "Want to update your #Top3?"
+        "_Share to help others buy & earn! 👆_\n\n"
+        "_Edit your Top 3:_ /list 👈"
     )
     # Prepare the buttons for the response
-    say_hi = await say_hi_button(update, context)  # Get the "Say Hi" button
+    #say_hi = await say_hi_button(update, context)  # Get the "Say Hi" button
 
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄 Edit #Top3", callback_data="/list"), say_hi]
-    ])
+    #buttons = InlineKeyboardMarkup([
+    #    [InlineKeyboardButton("🔄 Edit #Top3", callback_data="/list"), say_hi]
+    #])
     
     await send_message(
         update,
         context,
         message_text,
-        reply_markup=buttons,
+        reply_markup=None,
+    )
+
+async def send_share_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message prompting the user to edit their top 3 tokens."""
+    message_text = markdown_v2(
+        "_Getting your exchange ready...👆_"
+    )
+    # Prepare the buttons for the response
+    #say_hi = await say_hi_button(update, context)  # Get the "Say Hi" button
+
+    #buttons = InlineKeyboardMarkup([[say_hi]])
+
+    await send_message(
+        update,
+        context,
+        message_text,
+        reply_markup=None,
+    )
+
+async def send_share_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message prompting the user to edit their top 3 tokens."""
+    message_text = markdown_v2(
+        "_Share to help others buy & earn! 👆_"
+    )
+    # Prepare the buttons for the response
+    #say_hi = await say_hi_button(update, context)  # Get the "Say Hi" button
+
+    #buttons = InlineKeyboardMarkup([[say_hi]])
+
+    await send_message(
+        update,
+        context,
+        message_text,
+        reply_markup=None,
     )
 
 
 async def clear_cache(update, context):
     """Clear specific fields in user data to reset user intent and transaction details."""
+    await delete_loading_message(update, context)
     logger.debug("Clearing user_data: intent, tokens, amount, receiver")
     fields_to_clear = ['intent', 'tokens', 'amount', 'receiver']
     for field in fields_to_clear:
         context.user_data.pop(field, None)
     return ConversationHandler.END
 
+async def send_loading_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a random witty loading message and store its message ID."""
+    message_text = markdown_v2(random.choice(LOADING))  # Select a random message
+    loading_msg = await send_message(
+        update,
+        context,
+        message_text,
+        reply_markup=None,
+    )
+    context.user_data['loading_id'] = loading_msg.message_id  # Store the message ID
+
+async def delete_loading_message(update, context):
+    """Delete the previously sent loading message if it exists."""
+    loading_id = context.user_data.pop('loading_id', None)
+    if loading_id:
+        try:
+            await context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=loading_id
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete loading message: {e}")

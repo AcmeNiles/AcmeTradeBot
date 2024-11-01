@@ -1,6 +1,6 @@
 from config import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
-
+from utils.reply import send_loading_message
 from telegram.ext import ConversationHandler, ContextTypes
 from config import *
 
@@ -24,7 +24,8 @@ async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             logger.debug("Bot not mentioned in the group/supergroup. Ignoring the message.")
             return ConversationHandler.END
-    
+
+    await send_loading_message(update, context)
     # Get the input from the update
     input_data = await extract_input(update, context)
     logger.debug(f"Received input_data: {input_data}")

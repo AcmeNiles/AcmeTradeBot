@@ -26,8 +26,8 @@ async def fetch_and_format_token_market_data(contract_address: str, chain_id: st
         "include_last_updated_at=true"
     )
 
-    logger.info(f"Fetching token market data for {contract_address} on chain {chain_id}.")
-    logger.debug(f"CoinGecko API URL: {url}")
+    #ogger.info(f"Fetching token market data for {contract_address} on chain {chain_id}.")
+    #logger.debug(f"CoinGecko API URL: {url}")
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -36,7 +36,7 @@ async def fetch_and_format_token_market_data(contract_address: str, chain_id: st
                 response.raise_for_status()  # Raise an error for bad responses
                 data = await response.json()  # Await the JSON response
 
-                logger.debug(f"Response data from CoinGecko: {data}")
+                #logger.debug(f"Response data from CoinGecko: {data}")
 
                 if not data:
                     logger.warning(f"No data found for token address: {contract_address}")

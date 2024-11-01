@@ -2,15 +2,17 @@ import aiohttp
 import asyncio
 import base64
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ExtBot, ContextTypes, CallbackContext
+from telegram.ext import ExtBot, CallbackContext
 from dataclasses import dataclass
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.exceptions import InvalidSignature
+from utils.membership import get_invite_link
 from handlers.auth_handler import decrypt_data, decrypt_auth_result, store_auth_result
+from config import PHOTO_COYOTE_MIC, logger, ACME_API_KEY, ACME_URL, DEFAULT_TIMEOUT, RETRY_COUNT, URL, LOGGED_IN, FEATURES, MAKE_MONEY, BOT_USERNAME, ACME_APP_URL, ACME_GROUP, PASS_CLAIMED
 
-from config import logger, ACME_API_KEY, ACME_URL, DEFAULT_TIMEOUT, RETRY_COUNT, URL
+from messages_photos import markdown_v2
 
 @dataclass
 class AcmeWebhookUpdate:
@@ -135,8 +137,11 @@ async def process_acme_payload(data, signature, application):
     # Decrypt the user data if it exists
     decrypted_user_data = decrypt_data(encrypted_user_data) if encrypted_user_data else {}
 
+    #logger.debug("Decrypted User Data: %s", decrypted_user_data)
+    
     auth_result = decrypt_auth_result(decrypted_user_data)
 
+    #logger.debug(f"Auth Result: {auth_result}")
     # Check if auth_result is None or empty
     if not auth_result or 'tg_id' not in auth_result:
         logger.error("Auth result is empty or invalid.")
@@ -148,9 +153,9 @@ async def process_acme_payload(data, signature, application):
 
     # Store the auth result in bot_data and check if it was updated
     if user_tg_id:
-        auth_updated = await store_auth_result(application, user_tg_userName, auth_result)
+        auth_updated = await store_auth_result(application, user_tg_id, auth_result)
         if auth_updated:
-            logger.info(f"Stored auth result for user {user_tg_userName} in bot_data.")
+            logger.info(f"Stored auth result for user {user_tg_id} in bot_data.")
         else:
             logger.warning(f"Failed to store auth result for user {user_tg_id}.")
 
@@ -182,36 +187,43 @@ async def webhook_handler(update: AcmeWebhookUpdate, context: AcmeContext) -> No
             # Verify the user is a valid chat member
             chat_member = await context.bot.get_chat_member(chat_id=chat_id, user_id=chat_id)
             username = chat_member.user.first_name
+            username_display = f"{username}'" if username and username.endswith('s') else f"{username}'s"
+            invite_link = await get_invite_link(chat_id, ACME_GROUP, context)
 
             logger.info(f"User {username} ({chat_id}) is a valid chat member.")
 
-            # Configurable exchange message
+            await context.bot.send_message(chat_id=chat_id,text=markdown_v2(PASS_CLAIMED), parse_mode='MarkdownV2')
             
-            CLAIM_SUCCESS = """"
-                You claimed your pass! 🎉
+            local_message_menu = markdown_v2(LOGGED_IN.format(
+                username_display=username_display,
+                bot_username=BOT_USERNAME
+            ) + FEATURES + MAKE_MONEY)
 
-                *Let's start {username_display} Exchange 🚀*
-    
-                *🤑 Share → Earn*
-                Fees:    *0.5% USDC*
-                Points: *10 XP*
-            """
-            
-            message_text = CLAIM_SUCCESS.format(
-                username_display = f"{username}'" if username.endswith('s') else f"{username}'s",
-            )
-
-            # Create an inline keyboard button
             buttons = [
+                [
+                    InlineKeyboardButton("📈 Trade Now", callback_data='/trade')                
+                ],
                 [
                     InlineKeyboardButton("🤑 Share Token", callback_data='/share'),
                     InlineKeyboardButton("🤑 Share #Top3", callback_data='/top3')
-                ]
+                ],
+                [
+                    InlineKeyboardButton("🔐 Open Vault", url=ACME_APP_URL),
+                    InlineKeyboardButton("👋 Say Hi!", url=invite_link)
+                ],            
             ]
-            reply_markup = InlineKeyboardMarkup(buttons)
 
+            # Send the menu with the minting link and photo
+            reply_markup = InlineKeyboardMarkup(buttons)
+            
             # Send the message with the button
-            await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=PHOTO_COYOTE_MIC,
+                caption=local_message_menu,
+                reply_markup=reply_markup,
+                parse_mode='MarkdownV2'
+            )
         else:
             logger.info("No auth update detected, no message sent.")
 

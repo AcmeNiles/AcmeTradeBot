@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 from telegram.ext import CallbackContext, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import logger, BOT_USERNAME, MAX_LISTED_TOKENS, PHOTO_COYOTE_TABLE
-from utils.reply import send_message, send_photo, send_error_message, clear_cache, send_edit_top3_message
+from utils.reply import send_message, send_animation, send_error_message, clear_cache, send_edit_top3_message, delete_loading_message
 from utils.profilePhoto import fetch_user_profile_photo
 from utils.tokenValidator import fetch_and_format_token_data
 from handlers.auth_handler import get_auth_result
@@ -36,7 +36,7 @@ async def process_list(update: Update, context: CallbackContext) -> int:
 
         # Safely get username
         username = receiver_data.get('name') or auth_result.get('tg_firstName') or BOT_USERNAME
-
+        username_display = f"{username}'" if username.endswith('s') else f"{username}'s"
     
         combined_text = ""
         buttons = []
@@ -57,7 +57,6 @@ async def process_list(update: Update, context: CallbackContext) -> int:
             await send_error_message(update, context)
             return ConversationHandler.END
             
-        username_display = f"{username}'" if username.endswith('s') else f"{username}'s"
 
         final_message = markdown_v2(EXCHANGE.format(
             tokens=combined_text,  # Escape combined_text
@@ -72,8 +71,7 @@ async def process_list(update: Update, context: CallbackContext) -> int:
             ]) if buttons else None
         profile_photo = PHOTO_COYOTE_TABLE
         #profile_photo = await fetch_user_profile_photo(update, context) or PHOTO_EXCHANGE
-
-        await send_photo(update, context, profile_photo, final_message, reply_markup)
+        await send_animation(update, context, profile_photo, final_message, reply_markup)
         logger.info("Successfully sent the combined trading message.")
         await send_edit_top3_message(update, context)
         return await clear_cache(update, context)

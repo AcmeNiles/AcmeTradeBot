@@ -1,36 +1,37 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
-from utils.reply import send_photo, say_hi_button
+from utils.reply import send_photo, say_hi_button, delete_loading_message
 from utils.tokenValidator import validate_tokens
 from utils. getAcmeProfile import validate_user_and_tokens
 from actions.list import process_list
 from handlers.auth_handler import store_user_top3
-from config import logger, SELECT_TOKEN, FEATURED_TOKENS_PAY, FEATURED_TOKENS_TRADE, FEATURED_TOKENS_LIST, BOT_USERNAME, PHOTO_COYOTE_BANANA
+from config import logger, SELECT_TOKEN, FEATURED_TOKENS_PAY, FEATURED_TOKENS_TRADE, FEATURED_TOKENS_LIST, BOT_USERNAME, PHOTO_COYOTE_BANANA, PHOTO_COYOTE_COOK
 from messages_photos import markdown_v2
 
 ASK_TRADE = """
-☝️ *Tap. Trade. Done.*  
-_Buy any token in #OneTap_
+*⌨️ TYPE TOKEN TO {intent}:*  
+`Ex: POPCAT / 0x5a31...`
 
 🌐 _Supported Chains:_
 `Solana, Base, Arbitrum`
 
-*⌨️ TYPE TOKEN TO {intent}:*  
+"""
+
+ASK_SHARE = """
+*⌨️ TYPE TOKEN TO SHARE:*  
 `Ex: POPCAT / 0x5a31...`
 
+🌐 _Supported Chains:_
+`Solana, Base, Arbitrum`
 """
+
+
 ASK_LIST = """
-*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*
-_Help others buy your favorite tokens_
+*⌨️ TYPE YOUR TOP 3 TOKENS:*
+`Ex: POPCAT, TOSHI, BRETT`
 
-*🤑 Share → Earn*
-Fees:    *0.5% USDC*
-Points: *10 XP*
-
-*⌨️ TYPE TOP 3 TOKENS TO LIST:*
-`Memes: POPCAT, TOSHI, BRETT`
-`Games: POPCAT, TOSHI, BRETT`
-`AI:    POPCAT, TOSHI, BRETT`
+🌐 _Supported Chains:_
+`Solana, Base, Arbitrum`
 """
 
 # Define the message outside the function
@@ -62,6 +63,10 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         logger.warning("User provided invalid tokens: %s", invalid_tokens)
         await handle_invalid_tokens(update, context, intent, valid_tokens, invalid_tokens)
 
+    # Return ConversationHandler.END only if there are no valid tokens
+    if len(valid_tokens) == 0:
+        return ConversationHandler.END
+        
     # Store valid tokens in context user data
     context.user_data['tokens'] = valid_tokens  # Store valid tokens for later use
 
@@ -69,24 +74,36 @@ async def handle_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if intent == "list":
         await store_user_top3(update, context, valid_tokens)
 
-    logger.info("Valid tokens for user %s: %s", update.effective_user.id, valid_tokens)
+    logger.debug("Valid tokens for user %s: %s", update.effective_user.id, valid_tokens)
     return True
 
 
 async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, invalid_tokens=None) -> int:
     """Prompt the user to enter or select a token."""
-    user_intent = context.user_data.get("intent", "trade")  # Default intent is 'trade'
+    # Check if the user intent in context is 'top3'
+    if context.user_data.get("intent") == "top3":
+        user_intent = "list"  # Set user_intent to 'list'
+    else:
+        user_intent = context.user_data.get("intent", "trade")  # Default to 'trade' if not 'top3'
 
     # Nested intent-based logic for token prompts with specific "why" buttons
-    if user_intent == 'list':
-        username = update.effective_user.first_name
+    if user_intent in ['list','top3']:
+        username = f"{update.effective_user.first_name} {update.effective_user.last_name}"
         template = ASK_LIST.format(
             username_display = f"{username}'" if username.endswith('s') else f"{username}'s",
             bot_username=BOT_USERNAME
         )
         featured_tokens = FEATURED_TOKENS_LIST
         why_button = InlineKeyboardButton("Learn More", callback_data='/why_list')
-    elif user_intent in ['trade', 'share']:
+    elif user_intent == 'share':
+        username = f"{update.effective_user.first_name} {update.effective_user.last_name}"
+        template = ASK_SHARE.format(
+            username_display = f"{username}'" if username.endswith('s') else f"{username}'s",
+            bot_username=BOT_USERNAME
+        )
+        featured_tokens = FEATURED_TOKENS_TRADE
+        why_button = InlineKeyboardButton("Learn More", callback_data='/why_list')
+    elif user_intent == 'trade':
         template = ASK_TRADE.format(
             intent = user_intent.upper()
         )
@@ -120,7 +137,7 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, i
 
     # Combine the specific "why" button and "Say Hi" button into a new row
     buttons = token_buttons + [[why_button, say_hi]]  # Both buttons are in the second row
-
+    await delete_loading_message(update, context)
     # Send the photo to the user with the caption and buttons
     await send_photo(
         update,
@@ -133,10 +150,10 @@ async def prompt_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE, i
 
 async def handle_invalid_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE, intent, valid_tokens, invalid_tokens):
     """Handles invalid tokens by sending a warning and prompting for a listing request."""
-    invalid_tokens_text = ", ".join(invalid_tokens).upper()
+    invalid_tokens_text = ", ".join(token.replace("_", r"\_") for token in invalid_tokens).upper()
     verb = "is" if len(invalid_tokens) == 1 else "are"
     caption = markdown_v2(NOT_LISTED.format(tokens_text=invalid_tokens_text, verb=verb))
-    photo_url = PHOTO_TOP3  # Replace with your actual image URL
+    photo_url = PHOTO_COYOTE_COOK  # Replace with your actual image URL
 
     logger.warning(f"Invalid token(s) entered: {invalid_tokens_text}")
 
@@ -146,6 +163,7 @@ async def handle_invalid_tokens(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("🔄 Try Again", callback_data=f"/{intent}")]
     ]
 
+    await delete_loading_message(update, context)
     # Send the photo to the user with the caption and buttons
     await send_photo(
         update,
@@ -154,7 +172,3 @@ async def handle_invalid_tokens(update: Update, context: ContextTypes.DEFAULT_TY
         caption=caption,
         reply_markup=InlineKeyboardMarkup(buttons)
     )
-
-    # Return ConversationHandler.END only if there are no valid tokens
-    if len(valid_tokens) == 0:
-        return ConversationHandler.END

@@ -87,7 +87,7 @@ SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECEIVER = range(3)
 
 # Global variables for valid and authenticated commands
 VALID_COMMANDS = {'trade', 'pay', 'request', 'share', 'top3', 'list', 'delist', 'vault', 'start', 'menu','logout','cancel','why_list','why_trade'}
-AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault', 'list'}
+AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault', 'list','top3','share','start','menu'}
 # Define featured tokens for different intents
 
 FEATURED_TOKENS_TRADE = [
@@ -109,10 +109,9 @@ FEATURED_TOKENS_PAY = [
 ]
 # List of supported chain IDs
 SUPPORTED_CHAIN_IDS = {
-    '1151111081099710': 'solana',   # Solana
     '8453': 'base',                 # Base
     '42161': 'arbitrum-one',        # Arbitrum One
-    '137': 'polygon-pos'            # Polygon (PoS)
+    '1151111081099710': 'solana'   # Solana
 }
 MAX_LISTED_TOKENS = 3  # Configurable value for maximum listed tokens
 
@@ -125,7 +124,9 @@ PHOTO_COYOTE_COOK = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/07774565-a
 PHOTO_COYOTE_CHAMPAGNE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/6df6cab5-27cc-4eda-ebbd-ea67821be000/public"
 PHOTO_COYOTE_CHEST = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/28c4155d-873c-4a54-52c3-a4a02e6eba00/public"
 PHOTO_COYOTE_MIC = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/00e0ad8a-c96d-4b5e-034f-21d9dcd4bd00/public"
-PHOTO_COYOTE_TABLE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/88bf2cea-caae-4e3c-3733-2fc6f9b2e000/public"
+PHOTO_COYOTE_TABLE = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/8ab1aa39-4155-42a5-d6bc-d0127c871c00/public"
+PHOTO_COYOTE_START = "https://imagedelivery.net/P5lw0bNFpEj9CWud4zMJgQ/08d9d99f-98e5-41f0-f5f1-331d3e4b5c00/public"
+
 
 WHY_TRADE = """
 ☝️ *Tap. Trade. Done.*  
@@ -143,17 +144,43 @@ Hold tokens in Safes securing *$100B+*. Only *you* have the keys.
 
 WHY_LIST = """
 \n*🔥 Start Your Exchange. Today.*  
-_Help others buy your favorite tokens!_\n
 
 1️⃣ *List → Share*
-Easily list any token & share.
+Simply type _/share_ to list your token.
 
 2️⃣ *Share → Buy*
-Buy shared tokens with bank cards — super easy!
+Share to help others easily buy the token.
 
 3️⃣ *Buy → Earn*
 Earn up to 1% fees & rewards on each trade — instantly.
 """
+LOGGED_IN = "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n\n"
+
+START_EXCHANGE = """
+*🔥 Start Your Exchange. Today.\n*
+"""
+
+FEATURES = """
+💳 *Tap.* *Trade.* *Done*.
+Buy any token with your bank card.
+_Earn 30% fees + XP_.
+
+🤑 *Help Others Buy*
+List & share tokens you love.
+_Earn 50% fees + XP._
+
+🔐 *Own Your Tokens*
+Stored in Safes securing $100B+.
+_Only you have the keys._
+"""
+
+CLAIM_PASS = """
+\n*👑 Claim Early Pass to get started!* 
+"""
+MAKE_MONEY = """
+💸 Let’s make some money!
+"""
+PASS_CLAIMED = "You claimed your pass! 🎉"
 
 FAQ = """
 \n﹒﹒﹒\n

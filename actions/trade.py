@@ -2,7 +2,7 @@ from config import logger, BOT_USERNAME, PHOTO_COYOTE_COOK
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import CallbackContext, ConversationHandler
 from utils.tokenValidator import fetch_and_format_token_data
-from utils.reply import send_message, send_photo, clear_cache
+from utils.reply import send_message, send_photo, clear_cache, send_share_message
 from handlers.auth_handler import get_auth_result
 from messages_photos import markdown_v2
 
@@ -16,6 +16,7 @@ TRADE_TEMPLATE = (
 async def process_trade(update: Update, context: CallbackContext) -> int:
     logger.info("Processing single trade request.")
     try:
+        intent = context.user_data.get('intent') or 'trade'
         receiver_data = context.user_data.get('receiver') or {}
         auth_result = await get_auth_result(update, context) or {}
 
@@ -40,10 +41,12 @@ async def process_trade(update: Update, context: CallbackContext) -> int:
 
             # Prepare the reply markup with a single button for the trade
             reply_markup = InlineKeyboardMarkup([[button]])
-
+            #logger.debug(f"final_message: {final_message}")
             # Send the photo with the formatted message and button
             await send_photo(update, context, logo_url, final_message, reply_markup)
             logger.info("Successfully sent the trading message.") 
+            await send_share_message(update, context) if intent == 'share' else None
+
             return await clear_cache(update, context)
 
         except Exception as e:

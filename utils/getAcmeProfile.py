@@ -45,32 +45,45 @@ async def get_user_listed_tokens(user_id: str) -> list:
     except aiohttp.ClientError as e:
         logger.error(f"Error fetching tokens for user ID: {user_id}. Exception: {e}")
         return []
-
-
+        
 async def validate_user_and_tokens(receiver_username: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> tuple:
     """Validate the user and their tokens, and return the valid ones."""
+    from handlers.auth_handler import get_user_top3
     logger.debug("Validating receiver username: %s", receiver_username)
 
+    # Fetch the user's public profile from Acme
+    
     acme_user_data = await get_acme_public_profile(receiver_username)
     if not acme_user_data or not acme_user_data.get('id'):
         error_message = "User is not on Acme yet." if not acme_user_data else "Invalid user data."
         logger.error("Receiver validation failed: %s", error_message)
         return None, None, error_message
 
+    # Check if top3 tokens are already stored
+    valid_tokens = await get_user_top3(update, context, receiver_username)
+    if valid_tokens:
+        logger.info("Top3 tokens already exist for user: %s", update.effective_user.id)
+        return acme_user_data, valid_tokens, None  # Early return if tokens are present
+
+    # List tokens for the user
     user_id = acme_user_data['id']
+    logger.debug("Fetched user ID: %s, Username: %s", user_id, receiver_username)
     listed_tokens = await get_user_listed_tokens(user_id)
+    logger.debug("Listed tokens for user ID %s: %s", user_id, listed_tokens)
 
     if not listed_tokens:
         logger.warning("No tokens listed for user ID: %s", user_id)
         return None, None, "No tokens found for the user."
 
+    # Validate tokens and separate valid and invalid tokens
     valid_tokens, invalid_tokens = await validate_tokens(listed_tokens[:MAX_LISTED_TOKENS], update, context)
     if invalid_tokens:
-        logger.warning("Invalid tokens found: %s", invalid_tokens)
+        logger.warning("Invalid tokens found for user ID %s: %s", user_id, invalid_tokens)
         return None, None, "Invalid tokens found."
 
     logger.info("Receiver and tokens successfully validated for username: %s", receiver_username)
     return acme_user_data, valid_tokens, None
+
 
 async def process_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Validate the user and store their top3 in bot_data."""

@@ -3,22 +3,18 @@ import json
 import aiohttp
 import asyncio
 from datetime import datetime, timedelta
-
+from typing import Optional
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo, Bot
 from telegram.ext import ContextTypes, ConversationHandler
-from config import logger, URL, AUTH_EXPIRATION, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY,BOT_USERNAME, WHY_LIST, DEFAULT_TIMEOUT, RETRY_COUNT, PHOTO_COYOTE_CHEST
-
-from telegram.helpers import escape_markdown
+from config import CLAIM_PASS, START_EXCHANGE, logger, URL, AUTH_EXPIRATION, ACME_URL, ACME_API_KEY, ACME_ENCRYPTION_KEY, FEATURES, DEFAULT_TIMEOUT, RETRY_COUNT, PHOTO_COYOTE_START, PHOTO_COYOTE_COOK
 from messages_photos import markdown_v2
-from utils.reply import send_message, send_photo, send_error_message
+from utils.apiHelpers import get_acme_api_key, api_get_with_retries, api_post_with_retries
+from utils.reply import send_message, send_animation, send_error_message, delete_loading_message
 from utils.profilePhoto import fetch_user_profile_photo
-from utils.getAcmeProfile import get_user_listed_tokens
 
-LOGIN = WHY_LIST + """
-\n*👑 Claim Early Pass to get started!* 
-"""
+LOGIN = START_EXCHANGE + FEATURES + CLAIM_PASS
 
 async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_result=None):
     """
@@ -42,7 +38,7 @@ async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_re
     tokens_text = ', '.join(token.get('name', '').upper() for token in tokens if isinstance(token, dict))  
     menu_message = LOGIN.format(intent=intent, tokens=tokens_text)
 
-    photo_url = PHOTO_COYOTE_CHEST
+    photo_url = PHOTO_COYOTE_START
     buttons = [
         [InlineKeyboardButton("👑 Claim Early Pass", web_app=WebAppInfo(url=minting_link))],
         [InlineKeyboardButton("👋 Say Hi!  ", url="https://t.me/acmeonetap")]
@@ -51,8 +47,9 @@ async def login_card(update: Update, context: ContextTypes.DEFAULT_TYPE, auth_re
     reply_markup = InlineKeyboardMarkup(buttons)
 
     try:
+        await delete_loading_message(update, context)
         # Send the photo using send_photo function
-        await send_photo(
+        await send_animation(
             update, 
             context, 
             photo_url, 
@@ -103,7 +100,7 @@ async def is_authenticated(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
             # Store the auth result with expiration
             if await store_auth_result(context.application, user_tg_id, auth_result):
-                logger.info(f"User authenticated successfully: {auth_result}")
+                logger.info(f"User authenticated successfully.")
             return auth_result
 
         elif isinstance(data, str) and data.startswith("http"):
@@ -189,7 +186,7 @@ async def create_auth_link(context, tg_key: str) -> dict:
             "The Coyote Early Pass unlocks exclusive perks for early bird users of Acme. "
             "Thank you for supporting us! 😊."
         ),
-        "imageUri": PHOTO_COYOTE_CHEST,
+        "imageUri": PHOTO_COYOTE_COOK,
         "websiteUrl": "https://www.acme.am",
     }
 
@@ -365,7 +362,7 @@ def decrypt_auth_result(decrypted_data: dict) -> dict:
         "tg_referrerTgId": user_tg_referrerTgId
     }
 
-async def store_auth_result(application, user_tg_username: str, auth_result: dict) -> bool:
+async def store_auth_result(application, user_tg_id: str, auth_result: dict) -> bool:
     """Store the auth result with an expiration and return success status."""
     bot_data = application.bot_data
 
@@ -374,14 +371,16 @@ async def store_auth_result(application, user_tg_username: str, auth_result: dic
         return False
 
     # Retrieve or create user entry
-    user_data = bot_data.get(user_tg_username, {})
+    user_data = bot_data.get(user_tg_id, {})
     current_auth = user_data.get("auth", {})
 
+    logger.debug(f"Current auth: {current_auth} & user_data: {user_data}")
     # Check if the current auth is expired or has a "url"
     if "auth" in user_data and user_data["expires_at"] > datetime.now():
         if "url" in current_auth:
-            logger.debug(f"Current auth has 'url', overwriting with new auth_result for user {user_tg_username}.")
+            logger.debug(f"Current auth has 'url', overwriting with new auth_result for user {user_tg_id}.")
             user_data["auth"] = auth_result  # Overwrite the entire auth
+            logger.debug(f"Updated auth_result for user {user_tg_id}: {auth_result}")
         else:
             logger.debug(f"Auth result: {user_data}\nNot overwriting.")
             return False
@@ -390,65 +389,88 @@ async def store_auth_result(application, user_tg_username: str, auth_result: dic
         user_data["auth"] = auth_result
         user_data["expires_at"] = datetime.now() + timedelta(minutes=AUTH_EXPIRATION)
 
-    bot_data[user_tg_username] = user_data
+    bot_data[user_tg_id] = user_data
 
-    logger.debug(f"Stored auth result for user {user_tg_username}.")
+    logger.debug(f"Stored auth result for user {user_tg_id}.")
     return True
 
 
 async def get_auth_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retrieve and validate the stored auth result for the user."""
-    user_tg_userName = update.effective_user.username
-    data = context.bot_data.get(user_tg_userName)
-    logger.debug(f"Retrieved auth result for user {user_tg_userName}: {data and "auth" in data and data["expires_at"] > datetime.now()}")
+    user_tg_id = update.effective_user.id
+    data = context.bot_data.get(user_tg_id)
+    logger.debug(f"Retrieved auth result for user {user_tg_id}: {data and "auth" in data and data["expires_at"] > datetime.now()}")
     if data and "auth" in data and data["expires_at"] > datetime.now():
         return data["auth"]
 
     # Cleanup expired data
-    context.bot_data.pop(user_tg_userName, None)
+    context.bot_data.pop(user_tg_id, None)
     return None
 
+async def get_featured_tokens(update, context):
+    """Fetch featured tokens from the Acme API."""
+    api_key = await get_acme_api_key(update, context)
+    url = f"{ACME_URL}/dev/intent/get-featured-tg-purchase-links"
+    headers = {'X-API-KEY': api_key}
 
-async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, top3: list) -> bool:
-    """Store or update the top3 data, adding up to 3 items or replacing if already full."""
-    bot_data = context.bot_data  # Access bot_data through context
+    return await api_get_with_retries(url, headers)
 
-    if not top3:
-        logger.error("Top3 data not provided.")
-        return False
+async def set_featured_tokens(update, context, intent_ids, reset_featured=False):
+    """Set featured tokens in the Acme API."""
+    api_key = await get_acme_api_key(update, context)
+    url = f"{ACME_URL}/dev/intent/set-featured-tg-purchase-links"
+    headers = {'X-API-KEY': api_key}
+    payload = {"intentIds": intent_ids, "resetFeatured": reset_featured}
 
-    user_tg_username = update.effective_user.username  # Get the username from the update
+    response = await api_post_with_retries(url, headers, payload)
+    return response.get("data",None)
 
-    # Retrieve or create user entry
-    user_data = bot_data.get(user_tg_username, {})
-    existing_top3 = user_data.get("top3", [])
+async def get_user_top3(update, context):
+    """Retrieve the top 3 tokens for the user, either from bot_data or the API."""
+    user_id = update.effective_user.id
+    user_data = context.bot_data.get(user_id, {})
 
-    # Ensure existing_top3 is a list
-    if not isinstance(existing_top3, list):
-        logger.warning("Converting non-list top3 data to list.")
-        existing_top3 = list(existing_top3)
+    # Check if top3 exists and is valid
+    if "top3" in user_data and user_data["expires_at"] > datetime.now():
+        logger.info("Retrieved top 3 tokens from context for user %s", user_id)
+        return user_data["top3"]
 
-    # Combine lists and remove duplicates, keeping only the latest occurrence
-    combined_top3 = existing_top3 + top3
-    deduplicated_top3 = [item for i, item in enumerate(combined_top3) if item not in combined_top3[i + 1:]]
+    # Fetch from API if not available or expired
+    return await get_featured_tokens(update, context)
 
-    # Keep only the last 3 items
-    user_data["top3"] = deduplicated_top3[-3:]
+async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, top3_tokens: list) -> bool:
+    """Store the top 3 tokens in context.bot_data and set them as featured."""
+    user_id = update.effective_user.id
+
+    # Check if user data already exists
+    user_data = context.bot_data.get(user_id, {})
+
+    # Determine if we need to reset featured tokens
+    reset_featured = len(top3_tokens) == 3
+
+    # If top3_tokens length is less than 2, fetch existing top 3 tokens
+    if len(top3_tokens) < 2:
+        existing_top3 = await get_user_top3(update, context)
+        combined_top3 = list(set(existing_top3 + top3_tokens))  # Deduplicate the tokens
+        logger.debug(f"Combined top3 tokens: {combined_top3}")
+        user_data["top3"] = combined_top3[-3:]  # Keep only the last 3 tokens
+    else:
+        user_data["top3"] = top3_tokens  # Set the new top 3 tokens
 
     # Set expiration time
     user_data["expires_at"] = datetime.now() + timedelta(minutes=AUTH_EXPIRATION)
-    bot_data[user_tg_username] = user_data  # Store updated user data
 
-    logger.debug(f"Updated top3 for user {user_tg_username}: {user_data['top3']}")
-    return True
-    
-async def get_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE,  username: str = None):
-    """Retrieve and validate the stored top3 data for the user."""
+    # Store the updated user_data back in bot_data
+    context.bot_data[user_id] = user_data
+    # Use the set-featured API to update Acme's records
+    intent_ids = [token["tradingLink"].split('/')[-1] for token in user_data["top3"] if "tradingLink" in token]
+    api_response = await set_featured_tokens(update, context, intent_ids, reset_featured=reset_featured)
 
-    # Use provided username or fallback to the effective user's username
-    user_tg_userName = username if username else update.effective_user.username
-    data = context.bot_data.get(user_tg_userName)
-
-    if data and "top3" in data and data["expires_at"] > datetime.now():
-        return data["top3"]
-    return None
+    logger.debug(f"API REPONSE: {api_response}")
+    # Log the result and update bot data if successful
+    if api_response:
+        logger.info("Top 3 tokens stored and set as featured for user %s", user_id)
+        return True
+    else:
+        logger.error("Failed to set featured tokens for user %s", user_id)
+        return False

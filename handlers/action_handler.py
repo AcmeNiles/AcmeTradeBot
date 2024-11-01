@@ -5,8 +5,8 @@ from config import AUTHENTICATED_COMMANDS
 from actions.menu import process_menu
 from actions.trade import process_trade
 from actions.list import process_list
+from utils.reply import send_why_trade, send_why_list
 from utils.getAcmeProfile import process_user_top3
-from utils.reply import send_why_list, send_why_trade
 from handlers.auth_handler import is_authenticated, login_card, store_auth_result, get_auth_result, get_user_top3
 from handlers.token_handler import handle_token
 from handlers.receiver_handler import handle_receiver
@@ -21,16 +21,12 @@ async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     intent = context.user_data.get('intent') or None
     auth_result = await get_auth_result(update, context) or await authenticate_user(update, context)
     tokens = context.user_data.get('tokens') or None
-    
     logger.info(f"User {update.effective_user.id} - Processing action for intent: {intent}")
-
-    # Handle special intents ('logout', 'start', 'menu', 'cancel','why_trade','why_list')
-    if intent in {'logout', 'start', 'menu', 'cancel'}:
-        return await handle_special_intents(update, context, intent)
 
     if intent in {'why_trade'}:
     # Handle special intents ('logout', 'start', 'menu', 'cancel')
         return await send_why_trade(update, context)
+
     if intent in {'why_list'}:
         # Handle special intents ('logout', 'start', 'menu', 'cancel')
         return await send_why_list(update, context)
@@ -38,6 +34,10 @@ async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Redirect if authentication is required
     if intent in AUTHENTICATED_COMMANDS and (not auth_result or 'url' in auth_result):
         return await handle_login_redirect(update, context, auth_result, intent)
+
+    # Handle special intents ('logout', 'start', 'menu', 'cancel','why_trade','why_list')
+    if intent in {'logout', 'start', 'menu', 'cancel'}:
+        return await handle_special_intents(update, context, intent)
 
     # Handle trade-related intents
     if intent in {'trade', 'top3', 'share', 'buy'}:
@@ -62,7 +62,7 @@ async def authenticate_user(update, context):
         dict: The authentication result if successful, or None if authentication fails.
     """
     start_time = time.time()
-    user_tg_username = update.effective_user.username
+    user_tg_id = update.effective_user.id
 
     try:
         auth_result = await is_authenticated(update, context)
@@ -70,11 +70,11 @@ async def authenticate_user(update, context):
 
         # Store the authentication result using the store_auth_result function
         if auth_result:
-            success = await store_auth_result(context.application, user_tg_username, auth_result)
+            success = await store_auth_result(context.application, user_tg_id, auth_result)
             if success:
-                logger.info(f"Successfully stored auth result for user: {user_tg_username}")
+                logger.info(f"Successfully stored auth result for user: {user_tg_id}")
             else:
-                logger.warning(f"Failed to store auth result for user: {user_tg_username}")
+                logger.warning(f"Failed to store auth result for user: {user_tg_id}")
 
         return auth_result if auth_result else None
     except aiohttp.ClientError as e:
@@ -114,14 +114,7 @@ async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # Retrieve top3 tokens for the user via helper function
             top3_tokens = await get_user_top3(update, context)
-
-            # If top3 tokens are empty or incomplete, process to populate top3
-            if not top3_tokens or len(top3_tokens) < 3:
-                await process_user_top3(update, context)
-
-                # Fetch updated top3 tokens after processing
-                top3_tokens = await get_user_top3(update, context)
-
+            
             # If we have exactly 3 tokens, proceed with the `process_list`
             if top3_tokens and len(top3_tokens) == 3:
                 context.user_data['tokens'] = top3_tokens
@@ -140,6 +133,9 @@ async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYP
     if receiver and not tokens:
         state = await handle_receiver(update, context)
         context.user_data['intent'] = 'list'
+        context.user_data['tokens'] = (
+            context.user_data['receiver']['tokens'] if isinstance(context.user_data.get('receiver'), dict) else []
+        )
         if state != SELECT_RECEIVER:
             return await process_list(update, context)
         return state if state == SELECT_RECEIVER else ConversationHandler.END
@@ -147,7 +143,7 @@ async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYP
     # Case 3: Tokens exist, but receiver is None
     if tokens and not receiver:
         state = await handle_token(update, context)
-        if state != SELECT_TOKEN:
+        if state not in [SELECT_TOKEN, ConversationHandler.END]:
             return await process_trade(update, context)
         return state if state == SELECT_TOKEN else ConversationHandler.END
 
@@ -157,7 +153,7 @@ async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYP
         token_state = await handle_token(update, context)
 
         # Proceed to `process_trade` if neither state is `SELECT_TOKEN` or `SELECT_RECEIVER`
-        if token_state != SELECT_TOKEN and receiver_state != SELECT_RECEIVER:
+        if token_state != [SELECT_TOKEN, ConversationHandler.END] and receiver_state != SELECT_RECEIVER and len(context.user_data.get('tokens', [])) == 0:
             return await process_trade(update, context)
 
         # If the states require further interaction, end the conversation

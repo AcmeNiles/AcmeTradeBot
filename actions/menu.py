@@ -1,20 +1,23 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ConversationHandler, ContextTypes
-from config import logger, ACME_GROUP, ACME_APP_URL, PHOTO_COYOTE_MIC
+from config import logger, ACME_GROUP, ACME_APP_URL, PHOTO_COYOTE_MIC, FEATURES, BOT_USERNAME
 from utils.membership import get_invite_link
 from utils.reply import send_animation, send_photo, clear_cache
 from handlers.auth_handler import get_auth_result
 from messages_photos import markdown_v2
 
 # Define common menu messages with unescaped characters
+LOGGED_OUT = "\n *👋 Start Your Exchange. Today.* \n\n"
+LOGGED_IN = "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n\n"
+
+
 MENU = (
-    "\n *👋 Welcome to Acme!* \n\n\n"
     "💳 *Tap.* *Trade.* *Done*.\n"
-    "Buy any token with your bank card.\n\n"
-    "🤑 *Start Your Exchange*\n"
-    "List & share tokens. Get paid instantly.\n\n"
+    "Buy any token with your bank card.\n_Earn 30% fees + XP_.\n\n"
+    "🤑 *Help Others Buy*\n"
+    "List & share tokens you love.\n_Earn 50% fees + XP._\n\n"
     "🔐 *Own Your Tokens*\n"
-    "Tokens are secured in a safe. Only *you* have the keys.\n\n\n"
+    "Stored in Safes securing $100B+.\n_Only you have the keys._\n\n\n"
     "💸 Let’s make some money!"
 )
 
@@ -40,7 +43,6 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         # Local copies of message and photo
-        #local_message_menu = escape_markdown(MENU, version=2)
         local_message_menu = markdown_v2(MENU)
         local_photo_menu = PHOTO_COYOTE_MIC
 
@@ -71,6 +73,15 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Handle authenticated user
             logger.info("User is authenticated, showing exchange option")
+            # Safely get username
+            username = auth_result.get('tg_firstName') or BOT_USERNAME
+            username_display = f"{username}'" if username and username.endswith('s') else f"{username}'s"
+
+            local_message_menu = markdown_v2(LOGGED_IN.format(
+                username_display=username_display,
+                bot_username=BOT_USERNAME
+            )+MENU)
+                                             
             buttons = [
                 [
                     InlineKeyboardButton("📈 Trade Now", callback_data='/trade')                

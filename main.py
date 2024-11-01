@@ -100,6 +100,7 @@ async def main():
             _message = request.json
             _signature = request.headers.get("acme-signature")
 
+            logger.debug(f"Received Acme payload: {_message}")
             if not _message or not _signature:
                 raise ValueError("Missing message body or Acme signature header.")
 
@@ -112,7 +113,7 @@ async def main():
             logger.error(f"Unexpected error during payload processing: {e}", exc_info=True)
             return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-        # Step 2: Trigger Synthetic Update if Auth Was Updated
+        # Step 2: Trigger Webhook Update
         try:
             if update:
                 # Add the update to the queue for processing
