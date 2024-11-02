@@ -63,6 +63,7 @@ async def fetch_and_format_token_market_data(contract_address: str, chain_id: st
         logger.error(f"Failed to fetch token data from CoinGecko: {str(e)}")
         return {}  # Return empty dict in case of error
 
+
 def format_financial_metrics(value: float, metric_type: str) -> str:
     """Format financial metrics for display."""
 
@@ -70,23 +71,26 @@ def format_financial_metrics(value: float, metric_type: str) -> str:
         return "N/A"
 
     if metric_type == "price":
-        if value < 0.01:  # Start using scientific notation for values less than 0.001
-            formatted = f"${value:.2e}"  # Format in scientific notation
+        if value < 0.01:
+            formatted = f"${value:.2e}"
             base, exp = formatted.split('e')
-            return f"{base}e{int(exp)}"  # Compress the exponent
-        return f"${value:.3f}".rstrip('0').rstrip('.')  # Standard decimal format for values >= 0.001
+            return f"{base}e{int(exp)}"
+        return f"${value:,.3f}".rstrip('0').rstrip('.')
 
     if metric_type in {"mcap", "volume", "circulating_supply", "total_supply"}:
+        if value < 100_000:
+            return f"${value:,.0f}"
         suffixes = ["", "K", "M", "B", "T"]
         idx = 0
         while value >= 1000 and idx < len(suffixes) - 1:
             value /= 1000
             idx += 1
-        return f"{value:.2f} {suffixes[idx]}"  # Add appropriate suffix
+        return f"{value:.2f}{suffixes[idx]}".rstrip('0').rstrip('.')
 
     if metric_type == "change_24h":
         sign = "+" if value > 0 else ""
         emoji = "🟢" if value > 0 else "🔴"
-        return f" {sign}{value:.2f}%"
+        return f"{sign}{value:.2f}%"
 
     return "N/A"
+

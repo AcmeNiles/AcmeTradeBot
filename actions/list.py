@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import CallbackContext, ConversationHandler
 from telegram.helpers import escape_markdown
-from config import logger, BOT_USERNAME, MAX_LISTED_TOKENS, PHOTO_COYOTE_TABLE
+from config import logger, BOT_USERNAME, MAX_LISTED_TOKENS, PHOTO_COYOTE_TABLE, MAKE_MONEY
 from utils.reply import send_message, send_animation, send_error_message, clear_cache, send_edit_top3_message, delete_loading_message
 from utils.profilePhoto import fetch_user_profile_photo
 from utils.tokenValidator import fetch_and_format_token_data
@@ -15,8 +15,7 @@ EXCHANGE = (
     "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n\n"
     "👇 Click to buy my *#Top3* tokens:\n\n"
     "{tokens}"
-    "💸 Let’s make some money!"
-)
+) + MAKE_MONEY
 
 NO_TOKENS = "No tokens available for processing"
 NO_VALID_TOKENS = "No valid tokens to display."

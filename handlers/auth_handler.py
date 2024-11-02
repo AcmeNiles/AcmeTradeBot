@@ -415,7 +415,7 @@ async def get_featured_tokens(update, context):
 
     return await api_get_with_retries(url, headers)
 
-async def set_featured_tokens(update, context, intent_ids, reset_featured=False):
+async def set_featured_tokens(update, context, intent_ids, reset_featured=True):
     """Set featured tokens in the Acme API."""
     api_key = await get_acme_api_key(update, context)
     url = f"{ACME_URL}/dev/intent/set-featured-tg-purchase-links"
@@ -423,7 +423,7 @@ async def set_featured_tokens(update, context, intent_ids, reset_featured=False)
     payload = {"intentIds": intent_ids, "resetFeatured": reset_featured}
 
     response = await api_post_with_retries(url, headers, payload)
-    return response.get("data",None)
+    return response
 
 async def get_user_top3(update, context):
     """Retrieve the top 3 tokens for the user, either from bot_data or the API."""
@@ -436,8 +436,12 @@ async def get_user_top3(update, context):
         return user_data["top3"]
 
     # Fetch from API if not available or expired
-    return await get_featured_tokens(update, context)
+    top3_tokens = await get_featured_tokens(update, context)
+    user_data["top3"] = top3_tokens  # Set the new top 3 tokens
+    context.bot_data[user_id] = user_data
+    return top3_tokens
 
+    
 async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, top3_tokens: list) -> bool:
     """Store the top 3 tokens in context.bot_data and set them as featured."""
     user_id = update.effective_user.id
@@ -445,15 +449,28 @@ async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, to
     # Check if user data already exists
     user_data = context.bot_data.get(user_id, {})
 
-    # Determine if we need to reset featured tokens
-    reset_featured = len(top3_tokens) == 3
-
-    # If top3_tokens length is less than 2, fetch existing top 3 tokens
-    if len(top3_tokens) < 2:
+    # If top3_tokens length is less than 3, fetch existing top 3 tokens
+    if len(top3_tokens) < 3:
         existing_top3 = await get_user_top3(update, context)
-        combined_top3 = list(set(existing_top3 + top3_tokens))  # Deduplicate the tokens
-        logger.debug(f"Combined top3 tokens: {combined_top3}")
-        user_data["top3"] = combined_top3[-3:]  # Keep only the last 3 tokens
+        logger.debug(f"Existing top 3 tokens: {existing_top3}")
+        logger.debug(f"Entered top 3 tokens: {top3_tokens}")
+
+        # Combine and deduplicate tokens based on 'tokenAddress' and 'chainId'
+        combined_top3_dict = {
+            f"{token.get('tokenAddress')}_{token.get('chainId')}": token for token in existing_top3
+        }
+
+        # Update with new tokens (overwriting duplicates)
+        for token in top3_tokens:
+            key = f"{token.get('address')}_{token.get('chainId')}"
+            combined_top3_dict[key] = token
+
+        # Convert back to list and keep only the latest 3 tokens
+        combined_top3 = list(combined_top3_dict.values())[-3:]
+        logger.debug(f"Combined top 3 tokens after deduplication: {combined_top3}")
+
+        # Update user data
+        user_data["top3"] = combined_top3
     else:
         user_data["top3"] = top3_tokens  # Set the new top 3 tokens
 
@@ -463,14 +480,17 @@ async def store_user_top3(update: Update, context: ContextTypes.DEFAULT_TYPE, to
     # Store the updated user_data back in bot_data
     context.bot_data[user_id] = user_data
     # Use the set-featured API to update Acme's records
-    intent_ids = [token["tradingLink"].split('/')[-1] for token in user_data["top3"] if "tradingLink" in token]
-    api_response = await set_featured_tokens(update, context, intent_ids, reset_featured=reset_featured)
+    intent_ids = [
+        token.get("intentId") if "intentId" in token else token["tradingLink"].split('/')[-1]
+        for token in user_data["top3"]
+    ]
+    api_response = await set_featured_tokens(update, context, intent_ids)
 
-    logger.debug(f"API REPONSE: {api_response}")
     # Log the result and update bot data if successful
     if api_response:
-        logger.info("Top 3 tokens stored and set as featured for user %s", user_id)
+        logger.info(f"{api_response}\nTop 3 tokens stored and set as featured for user %s", user_id)
         return True
     else:
+        logger.info(f"{api_response}\nFailed to set featured tokens for user %s", user_id)
         logger.error("Failed to set featured tokens for user %s", user_id)
         return False

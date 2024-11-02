@@ -1,6 +1,5 @@
 from config import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputFile
-from utils.reply import send_loading_message
 from telegram.ext import ConversationHandler, ContextTypes
 from config import *
 
@@ -10,27 +9,9 @@ async def input_to_action(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     Main handler that routes user input to the appropriate action or menu.
     """
-    logger.debug("Starting input_to_action...")
 
-    # Get the chat type (private, group, supergroup)
-    chat_type = update.message.chat.type if update.message else None
-    logger.debug(f"Chat type: {chat_type}")
-
-    # Handle group/supergroup messages
-    if chat_type in ['group', 'supergroup']:
-        # Check if the bot is mentioned in the group chat
-        if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
-            logger.debug("Bot mentioned in a group/supergroup. Proceeding with input handling.")
-        else:
-            logger.debug("Bot not mentioned in the group/supergroup. Ignoring the message.")
-            return ConversationHandler.END
-
-    await send_loading_message(update, context)
     # Get the input from the update
     input_data = await extract_input(update, context)
-    logger.debug(f"Received input_data: {input_data}")
-
-    logger.info("Routing action based on intent.")
     return await route_action(update, context)
 
 async def extract_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -38,7 +19,7 @@ async def extract_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     # Determine the relevant input text
     input_text = await get_input_text(update)
-    logger.debug(f"Received input text: {input_text}")
+    #logger.debug(f"Received input text: {input_text}")
 
     # Initialize extraction variables
     intent, new_tokens, receiver, amount = None, [], None, None
@@ -47,16 +28,16 @@ async def extract_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     for part in input_text.split():
         if part.startswith('/'):
             intent = part[1:]  # Remove '/' from the intent
-            logger.debug(f"Intent detected: {intent}")
+            #logger.debug(f"Intent detected: {intent}")
         elif part.startswith('@'):
             receiver = part[1:]  # Remove '/' from the intent
-            logger.debug(f"Receiver detected: {receiver}")
+            #logger.debug(f"Receiver detected: {receiver}")
         elif is_valid_float(part):
             amount = part
             logger.debug(f"Amount detected: {amount}")
         else:
             new_tokens.append(part.lower())
-            logger.debug(f"Token detected: {part.lower()}")
+            #logger.debug(f"Token detected: {part.lower()}")
 
     # Update context.user_data
     await update_user_data(context, new_tokens, receiver, amount, intent)
@@ -77,10 +58,10 @@ async def get_input_text(update: Update) -> str:
     elif update.message:
         logger.debug("Received a regular message.")
         message_text = update.message.text.strip()
-        logger.debug(f"Extracted message text from regular message: '{message_text}'")
+        #logger.debug(f"Extracted message text from regular message: '{message_text}'")
         return message_text
 
-    logger.debug("No valid message found in the update; returning an empty string.")
+    #logger.debug("No valid message found in the update; returning an empty string.")
     return ''
 
 async def update_user_data(context: ContextTypes.DEFAULT_TYPE, new_tokens: list, receiver: str, amount: str, intent: str) -> None:

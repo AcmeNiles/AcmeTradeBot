@@ -1,4 +1,4 @@
-from config import logger, BOT_USERNAME, PHOTO_COYOTE_COOK
+from config import logger, BOT_USERNAME, PHOTO_COYOTE_COOK, MAKE_MONEY
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import CallbackContext, ConversationHandler
 from utils.tokenValidator import fetch_and_format_token_data
@@ -10,8 +10,7 @@ from messages_photos import markdown_v2
 TRADE_TEMPLATE = (
     "📢 *[{username}](https://t.me/{bot_username}?start)* listed:\n\n"
     "{tokens}"
-    "💸 Let’s make some money!"
-)
+) + MAKE_MONEY
 
 async def process_trade(update: Update, context: CallbackContext) -> int:
     logger.info("Processing single trade request.")
@@ -47,7 +46,6 @@ async def process_trade(update: Update, context: CallbackContext) -> int:
             logger.info("Successfully sent the trading message.") 
             await send_share_message(update, context) if intent == 'share' else None
 
-            return await clear_cache(update, context)
 
         except Exception as e:
             logger.error(f"Error formatting or sending trade data: {str(e)}")
@@ -57,4 +55,4 @@ async def process_trade(update: Update, context: CallbackContext) -> int:
         logger.error(f"Error processing trade data: {str(e)}")
         await send_message(update, context, markdown_v2("An error occurred. Please try again."))
 
-    return ConversationHandler.END
+    return await clear_cache(update, context)

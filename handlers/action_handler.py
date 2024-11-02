@@ -5,7 +5,8 @@ from config import AUTHENTICATED_COMMANDS
 from actions.menu import process_menu
 from actions.trade import process_trade
 from actions.list import process_list
-from utils.reply import send_why_trade, send_why_list
+from utils.reply import send_why_trade, send_why_list, send_loading_message
+
 from utils.getAcmeProfile import process_user_top3
 from handlers.auth_handler import is_authenticated, login_card, store_auth_result, get_auth_result, get_user_top3
 from handlers.token_handler import handle_token
@@ -18,26 +19,33 @@ async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     Routes the action based on the user's intent, handling authentication,
     token, receiver, and amount validation, then executing the action.
     """
-    intent = context.user_data.get('intent') or None
-    auth_result = await get_auth_result(update, context) or await authenticate_user(update, context)
-    tokens = context.user_data.get('tokens') or None
+    intent = context.user_data.get('intent')
+    tokens = context.user_data.get('tokens')
+    # Get chat type (private, group, supergroup)
+    chat_type = update.message.chat.type if update.message else None
+    logger.debug(f"Chat type: {chat_type}")
+
+    # Early exit if in group/supergroup and intent is None or not a valid command
+    if chat_type in ['group', 'supergroup']:
+        if not tokens or intent not in AUTHENTICATED_COMMANDS:
+            return ConversationHandler.END
+
     logger.info(f"User {update.effective_user.id} - Processing action for intent: {intent}")
+    await send_loading_message(update, context)
+    # Fetch authentication result only if necessary after initial checks
+    auth_result = await get_auth_result(update, context) or await authenticate_user(update, context)
 
-    if intent in {'why_trade'}:
-    # Handle special intents ('logout', 'start', 'menu', 'cancel')
+    # Handle intents that don't require authentication
+    if intent == 'why_trade':
         return await send_why_trade(update, context)
-
-    if intent in {'why_list'}:
-        # Handle special intents ('logout', 'start', 'menu', 'cancel')
+    elif intent == 'why_list':
         return await send_why_list(update, context)
+    elif intent in {'logout', 'start', 'menu', 'cancel'}:
+        return await handle_special_intents(update, context, intent)
 
     # Redirect if authentication is required
     if intent in AUTHENTICATED_COMMANDS and (not auth_result or 'url' in auth_result):
         return await handle_login_redirect(update, context, auth_result, intent)
-
-    # Handle special intents ('logout', 'start', 'menu', 'cancel','why_trade','why_list')
-    if intent in {'logout', 'start', 'menu', 'cancel'}:
-        return await handle_special_intents(update, context, intent)
 
     # Handle trade-related intents
     if intent in {'trade', 'top3', 'share', 'buy'}:
@@ -51,9 +59,11 @@ async def route_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if intent in {'pay', 'request'}:
         return await handle_payment_intents(update, context, intent)
 
+    # Unrecognized intent, redirect to menu
     logger.warning(f"User {update.effective_user.id} - Unrecognized intent: {intent}, redirecting to menu.")
     context.user_data['intent'] = 'menu'
     return await process_menu(update, context)
+
 
 async def authenticate_user(update, context):
     """Authenticate the user if auth_result is not available.
@@ -115,12 +125,13 @@ async def handle_trade_related(update: Update, context: ContextTypes.DEFAULT_TYP
             # Retrieve top3 tokens for the user via helper function
             top3_tokens = await get_user_top3(update, context)
             
-            # If we have exactly 3 tokens, proceed with the `process_list`
-            if top3_tokens and len(top3_tokens) == 3:
+            # If we have tokens, proceed with the `process_list`
+            if top3_tokens:
                 context.user_data['tokens'] = top3_tokens
                 return await process_list(update, context)
             else:
                 logger.info(f"User {update.effective_user.id} - 'top3' tokens incomplete or missing, redirecting to token selection.")
+                context.user_data["intent"] = "list"
                 state = await handle_token(update, context)
                 return state if state == SELECT_TOKEN else ConversationHandler.END
 

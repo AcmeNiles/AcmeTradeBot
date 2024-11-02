@@ -127,10 +127,12 @@ async def get_trading_link_from_top3(update: Update, context: ContextTypes.DEFAU
         logger.warning("Token info list is None or empty. Skipping iteration.")
         return None
 
-    logger.debug(f"Retrieved top 3 tokens: {top3}")
     for token in top3:
-        if token.get("address") == token_address:
+        if token.get("tokenAddress") == token_address:
             trading_link = token.get("tradingLink")
+            intent_id = token.get("intentId")
+            if intent_id and not trading_link:  # Generate trading link only if it doesn't exist
+                trading_link = f"{ACME_APP_URL}/buy/{intent_id}"
             logger.debug(f"Found Trading Link: {trading_link}")
             return trading_link
 

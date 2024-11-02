@@ -1,25 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ConversationHandler, ContextTypes
-from config import logger, ACME_GROUP, ACME_APP_URL, PHOTO_COYOTE_MIC, FEATURES, BOT_USERNAME
+from config import logger, ACME_GROUP, ACME_APP_URL, PHOTO_COYOTE_MIC, LOGGED_IN, FEATURES, BOT_USERNAME, LETS_GO
 from utils.membership import get_invite_link
 from utils.reply import send_animation, send_photo, clear_cache
 from handlers.auth_handler import get_auth_result
 from messages_photos import markdown_v2
-
-# Define common menu messages with unescaped characters
-LOGGED_OUT = "\n *👋 Start Your Exchange. Today.* \n\n"
-LOGGED_IN = "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n\n"
-
-
-MENU = (
-    "💳 *Tap.* *Trade.* *Done*.\n"
-    "Buy any token with your bank card.\n_Earn 30% fees + XP_.\n\n"
-    "🤑 *Help Others Buy*\n"
-    "List & share tokens you love.\n_Earn 50% fees + XP._\n\n"
-    "🔐 *Own Your Tokens*\n"
-    "Stored in Safes securing $100B+.\n_Only you have the keys._\n\n\n"
-    "💸 Let’s make some money!"
-)
 
 async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Entered process_menu function")
@@ -42,20 +27,6 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return  # Early exit on error
 
     try:
-        # Local copies of message and photo
-        local_message_menu = markdown_v2(MENU)
-        local_photo_menu = PHOTO_COYOTE_MIC
-
-        if local_message_menu is None:
-            logger.error("MENU is missing or None.")
-            await update.message.reply_text("Menu content is not available.")
-            return  # Early exit on error
-
-        if local_photo_menu is None:
-            logger.error("PHOTO_MENU is missing or None.")
-            await update.message.reply_text("Menu photo is not available.")
-            return  # Early exit on error
-
         if auth_result is None or 'url' in auth_result:
             # Handle unauthenticated user
             logger.info("User is not authenticated, showing minting link")
@@ -80,7 +51,9 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             local_message_menu = markdown_v2(LOGGED_IN.format(
                 username_display=username_display,
                 bot_username=BOT_USERNAME
-            )+MENU)
+            )+FEATURES+LETS_GO)
+
+            local_photo_menu = PHOTO_COYOTE_MIC
                                              
             buttons = [
                 [
@@ -109,3 +82,5 @@ async def process_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Failed to process menu: {str(e)}")
         await update.message.reply_text("An error occurred while processing the menu. Please try again later.")
+        return await clear_cache(update, context)
+

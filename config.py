@@ -87,7 +87,7 @@ SELECT_TOKEN, SELECT_AMOUNT, SELECT_RECEIVER = range(3)
 
 # Global variables for valid and authenticated commands
 VALID_COMMANDS = {'trade', 'pay', 'request', 'share', 'top3', 'list', 'delist', 'vault', 'start', 'menu','logout','cancel','why_list','why_trade'}
-AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault', 'list','top3','share','start','menu'}
+AUTHENTICATED_COMMANDS = {'pay', 'request', 'vault', 'list','top3','share','start','menu','trade'}
 # Define featured tokens for different intents
 
 FEATURED_TOKENS_TRADE = [
@@ -154,20 +154,20 @@ Share to help others easily buy the token.
 3️⃣ *Buy → Earn*
 Earn up to 1% fees & rewards on each trade — instantly.
 """
-LOGGED_IN = "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n\n"
+LOGGED_IN = "*🚀 [{username_display} Exchange](https://t.me/{bot_username}?start) 🚀*\n"
 
 START_EXCHANGE = """
 *🔥 Start Your Exchange. Today.\n*
 """
 
 FEATURES = """
-💳 *Tap.* *Trade.* *Done*.
+💳 *Tap. Trade. Done*.
 Buy any token with your bank card.
-_Earn 30% fees + XP_.
+_Earn 30% fees & prizes!_
 
-🤑 *Help Others Buy*
-List & share tokens you love.
-_Earn 50% fees + XP._
+🤑 *List. Share. Earn.*
+Help others buy tokens you love.
+_Earn 50% fees & prizes!_
 
 🔐 *Own Your Tokens*
 Stored in Safes securing $100B+.
@@ -177,9 +177,9 @@ _Only you have the keys._
 CLAIM_PASS = """
 \n*👑 Claim Early Pass to get started!* 
 """
-MAKE_MONEY = """
-💸 Let’s make some money!
-"""
+LETS_GO = "\n💸 Let's make some money!"
+
+MAKE_MONEY = "💸 Buy & win up to $1,000!"
 PASS_CLAIMED = "You claimed your pass! 🎉"
 
 FAQ = """
